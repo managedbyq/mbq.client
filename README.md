@@ -1,4 +1,9 @@
 
+[![Library Version](https://img.shields.io/pypi/v/mbq.client.svg)](https://pypi.python.org/pypi/mbq.client)
+[![Library License](https://img.shields.io/pypi/l/mbq.client.svg)](https://pypi.python.org/pypi/mbq.client)
+[![Support Python Versions](https://img.shields.io/pypi/pyversions/mbq.client.svg)](https://pypi.python.org/pypi/mbq.client)
+[![Build Status](https://img.shields.io/travis/managedbyq/mbq.tokens/master.svg)](https://travis-ci.org/managedbyq/mbq.client)
+
 
 # Installation
 

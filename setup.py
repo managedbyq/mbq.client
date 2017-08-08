@@ -1,7 +1,9 @@
 import codecs
 import setuptools
 
-__version__ = '0.0.2'
+
+__version__ = '0.0.3'
+
 
 with codecs.open('README.md', 'r', 'utf-8') as f:
     readme = f.read()
@@ -17,7 +19,7 @@ setuptools.setup(
     maintainer='Managed by Q, Inc.',
     maintainer_email='open-source@managedbyq.com',
     classifiers=[
-        'Development Status :: 3 - Beta',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
