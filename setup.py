@@ -5,7 +5,7 @@ import setuptools
 __version__ = '0.0.3'
 
 
-with codecs.open('README.md', 'r', 'utf-8') as f:
+with codecs.open('README.rst', 'r', 'utf-8') as f:
     readme = f.read()
 
 setuptools.setup(
