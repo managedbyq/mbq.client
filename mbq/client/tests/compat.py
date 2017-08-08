@@ -6,4 +6,3 @@ except ImportError:
 MagicMock = mock.MagicMock
 patch = mock.patch
 call = mock.call
-

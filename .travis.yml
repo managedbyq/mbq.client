@@ -1,0 +1,34 @@
+sudo: false
+language: python
+python:
+- '2.7'
+- '3.5'
+- '3.6'
+- 3.7-dev
+- pypy-5.4.1
+- pypy3
+cache: pip
+matrix:
+  allow_failures:
+  - python: 3.7-dev
+  - python: pypy3
+install:
+- if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then travis_retry pip install mock; fi
+- travis_retry pip install --upgrade pip setuptools wheel twine flake8
+- pip install .
+script:
+- flake8
+- python -Wall -m unittest discover
+notifications:
+  email: false
+deploy:
+  provider: pypi
+  user: managedbyq
+  password:
+    secure: X3UfEWOFkg1qWfcnFEievJi6swGECUmqx9QPNJUoBt95RdmDcgScx4PySWqgzvOURkeoow8fY0MPmjG26snnNe9ouz8jzURJpfqbClldvqnN+pr1bIRzcGQKs9TVdS4DEoXTdwtrB6M8826xtyNo3zRfEK6E6ReZOZMvS24lGMwhq9lPnqtLIhLd9OYBivGqNT+Ec/soehq+HP6dsJVlJWVIGmeWhPJ3lA7nHsljF5demGSqTs7wA6fIzNk/GmGQKlQ1Cdmu7B8giS2UWzUVCx+oDI1U1RJ+Yru/DT4860BEBs7wsy3EeSwqZ3yDcpKnq4PP8/Yy7/Rum8/lcf0Cbvn9Z2sdQizY5hzHauciPIEcEvpZBQ7gq4meGBQhip7M/axu2OphLXblRLz8nwvBB05NyoBqM4i1b5ROf8lMfkI/Jpk9LALIkxvX/xzHpWuAIwi1Ys+UhYdzsUTjEkoAlSWH71GW89NI6/csi1PgORotBGRZ/aDHYEw+P2tTf5oesuFzdi4r6oESWXCIjBV9HKXYleZogcJ1RLndgAk28HgZFmqcqSiU+BdkQHWLbjqnbWp4PYkD+jjuT/+uHqIjWAYQyXjejMMe8kJ0fc7qZsNToJTZj6Htw6kcCCHbHEzv903J2djAXRW1dL0ptlZtpdnbwmQGo0PGKGqUax9ruxY=
+  skip_upload_docs: true
+  on:
+    tags: true
+    distributions: sdist bdist_wheel
+    python: '3.6'
+    repo: managedbyq/mbq.client

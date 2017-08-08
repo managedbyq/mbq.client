@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from compat import MagicMock, patch, call
+from .compat import MagicMock, patch, call
 
 from mbq.client.token_manager import TokenManager
 
@@ -14,8 +14,8 @@ class TokenManagerTestCase(TestCase):
         self.set = MagicMock()
 
         self.storage_mock = MagicMock(
-            set = self.set,
-            get = self.get
+            set=self.set,
+            get=self.get
         )
 
         self.get_auth0_token = MagicMock()
@@ -29,7 +29,7 @@ class TokenManagerTestCase(TestCase):
 
         self.token_manager = TokenManager(
             {
-                'api_ids' : {'test': 'test_id', 'other_service': 'other_id'},
+                'api_ids': {'test': 'test_id', 'other_service': 'other_id'},
                 'client_id': 'client_id',
                 'client_secret': 'shh... it\'s a secret',
                 'domain': 'auth0.com',
@@ -68,5 +68,3 @@ class TokenManagerTestCase(TestCase):
         refresh_token_mock.assert_has_calls(
             [call('test'), call('other_service')], any_order=True
         )
-
-
