@@ -3,7 +3,7 @@
 class DjangoCacheStorage(object):
 
     def __init__(self, cache, timeout=None):
-        self.cache = cache,
+        self.cache = cache
         self.timeout = timeout
 
     def set(self, key, value):
