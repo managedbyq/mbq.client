@@ -19,6 +19,7 @@ class FileStorage(object):
     def __init__(self, filename):
         self.filename = filename
         self.tokens = {}
+        open(self.filename, 'a').close()
 
     def _get_tokens_from_file(self):
         with open(self.filename, 'r') as f:
