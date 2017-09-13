@@ -1,8 +1,4 @@
 try:
-    from unittest import mock
+    from unittest.mock import call, MagicMock, patch  # noqa
 except ImportError:
-    import mock  # noqa
-
-MagicMock = mock.MagicMock
-patch = mock.patch
-call = mock.call
+    from mock import call, MagicMock, patch  # noqa
