@@ -18,7 +18,6 @@ class FileStorage(object):
 
     def __init__(self, filename):
         self.filename = filename
-        self.tokens = {}
         open(self.filename, 'a').close()
 
     def _get_tokens_from_file(self):
@@ -36,14 +35,5 @@ class FileStorage(object):
         with open(self.filename, 'w') as f:
             json.dump(tokens, f)
 
-        self.tokens = tokens
-
     def get(self, key):
-        val = self.tokens.get(key)
-
-        if val is None:
-            val = self._get_tokens_from_file().get(key)
-            if val is not None:
-                self.tokens[key] = val
-
-        return val
+        return self._get_tokens_from_file().get(key)
