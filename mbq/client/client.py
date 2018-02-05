@@ -9,11 +9,13 @@ logger = logging.getLogger(__name__)
 
 
 class ServiceClient:
-    def __init__(self, api_url, auth=None, headers=None, post_process_response=None):
+    def __init__(self, api_url, auth=None, headers=None, post_process_response=None,
+                 default_timeout=30):
         self._api_url = api_url
         self._auth = auth
         self._headers = headers
         self._post_process_response = post_process_response
+        self._timeout = default_timeout
 
     def _make_url(self, url):
         parsed = urlparse(url)
@@ -29,13 +31,16 @@ class ServiceClient:
         if self._auth and 'auth' not in kwargs:
             kwargs['auth'] = self._auth
 
+        if self._timeout and 'timeout' not in kwargs:
+            kwargs['timeout'] = self._timeout
+
         url = self._make_url(url)
 
         response = getattr(requests, method)(url, *args, **kwargs)
 
         try:
             response.raise_for_status()
-        except:
+        except: # noqa
             msg = '{} Bad Response: {}'.format(response.status_code, response.content)
             logger.error(msg)
             raise
@@ -45,7 +50,7 @@ class ServiceClient:
                 data = self._post_process_response(response.json())
             else:
                 data = response.json()
-        except:
+        except: # noqa
             if response.headers.get('content-length') == '0':
                 data = None
             else:
