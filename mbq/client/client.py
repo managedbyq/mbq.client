@@ -1,6 +1,7 @@
 from io import BufferedReader, BytesIO
 import logging
 import requests
+import uuid
 
 from .compat import urlparse
 
@@ -27,6 +28,14 @@ class ServiceClient:
     def _make_request(self, method, url, *args, **kwargs):
         if self._headers:
             kwargs['headers'] = dict(self._headers, **kwargs.get('headers', {}))
+        else:
+            kwargs['headers'] = {}
+
+        if 'correlation_id' in kwargs:
+            kwargs['headers']['X-Correlation-Id'] = kwargs['correlation_id']
+            del kwargs['correlation_id']
+        else:
+            kwargs['headers']['X-Correlation-Id'] = str(uuid.uuid4())
 
         if self._auth and 'auth' not in kwargs:
             kwargs['auth'] = self._auth
