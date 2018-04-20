@@ -30,6 +30,9 @@ setuptools.setup(
         'Programming Language :: Python :: 3.6',
         'Topic :: Software Development :: Libraries',
     ],
+    install_requires=[
+        'requests==2.18.4',
+    ],
     keywords='token access authorization',
     packages=setuptools.find_packages(),
     zip_safe=True,

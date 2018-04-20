@@ -12,4 +12,5 @@ def get_access_token(audience, client_id, client_secret, domain):
             'audience': audience,
         }
     )
+    response.raise_for_status()
     return response.json().get('access_token')
