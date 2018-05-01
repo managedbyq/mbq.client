@@ -31,7 +31,7 @@ setuptools.setup(
         'Topic :: Software Development :: Libraries',
     ],
     install_requires=[
-        'requests==2.18.4',
+        'requests<3.0.0',
     ],
     keywords='token access authorization',
     packages=setuptools.find_packages(),
