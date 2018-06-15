@@ -1,7 +1,6 @@
 from io import BufferedReader, BytesIO
 import logging
 import requests
-import uuid
 
 from .compat import urlparse
 
@@ -11,12 +10,16 @@ logger = logging.getLogger(__name__)
 
 class ServiceClient:
     def __init__(self, api_url, auth=None, headers=None, post_process_response=None,
-                 default_timeout=30):
+                 correlation_id_getter=None, default_timeout=30):
+        """ We use correlation_ids to track the flow of a request between different services.
+        It is the responsibility of users of ServiceClient to implement a correlation_id_getter
+        """
         self._api_url = api_url
         self._auth = auth
         self._headers = headers
         self._post_process_response = post_process_response
         self._timeout = default_timeout
+        self.correlation_id_getter = correlation_id_getter
 
     def _make_url(self, url):
         parsed = urlparse(url)
@@ -31,11 +34,10 @@ class ServiceClient:
         else:
             kwargs['headers'] = {}
 
-        if 'correlation_id' in kwargs:
-            kwargs['headers']['X-Correlation-Id'] = kwargs['correlation_id']
-            del kwargs['correlation_id']
-        else:
-            kwargs['headers']['X-Correlation-Id'] = str(uuid.uuid4())
+        if self.correlation_id_getter is not None:
+            cid = self.correlation_id_getter()
+            if cid is not None:
+                kwargs['headers']['X-Correlation-Id'] = cid
 
         if self._auth and 'auth' not in kwargs:
             kwargs['auth'] = self._auth

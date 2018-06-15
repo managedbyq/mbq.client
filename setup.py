@@ -2,7 +2,7 @@ import codecs
 import setuptools
 
 
-__version__ = '0.0.12'
+__version__ = '0.0.13'
 
 
 with codecs.open('README.rst', 'r', 'utf-8') as f:
