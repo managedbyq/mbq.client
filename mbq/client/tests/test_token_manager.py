@@ -1,6 +1,5 @@
 from unittest import TestCase
-
-from .compat import MagicMock, patch, call
+from unittest.mock import MagicMock, call, patch
 
 from mbq.client.token_manager import TokenManager
 

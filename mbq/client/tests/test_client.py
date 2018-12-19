@@ -1,10 +1,6 @@
 from unittest import TestCase
-try:
-    from unittest import mock
-except ImportError:
-    import mock
+from unittest.mock import Mock, patch
 
-from .compat import patch
 from mbq.client.client import ServiceClient
 
 
@@ -30,7 +26,7 @@ class CorrelationIDTestCase(TestCase):
             self.assertIsNone(headers.get('X-Correlation-Id'))
 
     def test_multivalued_correlation_id_getter_provided(self):
-        cid_getter_mock = mock.Mock()
+        cid_getter_mock = Mock()
         cid_getter_mock.side_effect = ['hello-world', 'goodbye-world']
         self.client = ServiceClient(
             'https://foo.com/',

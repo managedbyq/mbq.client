@@ -1,8 +1,8 @@
-from io import BufferedReader, BytesIO
 import logging
-import requests
+from io import BufferedReader, BytesIO
+from urllib.parse import urlparse
 
-from .compat import urlparse
+import requests
 
 
 logger = logging.getLogger(__name__)

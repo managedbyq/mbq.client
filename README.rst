@@ -1,5 +1,5 @@
 ###############
-MBQ Service to Service Client
+MBQ Service Client
 ###############
 
 .. image:: https://img.shields.io/pypi/v/mbq.client.svg

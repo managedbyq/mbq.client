@@ -1,26 +1,23 @@
+---
 sudo: false
+dist: xenial
 language: python
 python:
-- '2.7'
-- '3.5'
-- '3.6'
-- 3.7-dev
-- pypy-5.4.1
-- pypy3
+  - '3.6'
+  - '3.7'
 cache: pip
-matrix:
-  allow_failures:
-  - python: 3.7-dev
-  - python: pypy3
+
 install:
-- if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then travis_retry pip install mock; fi
-- travis_retry pip install --upgrade pip setuptools wheel twine flake8
-- pip install .
+  - travis_retry pip install --upgrade pip setuptools wheel twine isort flake8 flake8-isort
+  - pip install .
+
 script:
-- flake8
-- python -Wall -m unittest discover
+  - flake8
+  - python -Wall -m unittest discover
+
 notifications:
   email: false
+
 deploy:
   provider: pypi
   user: managedbyq
