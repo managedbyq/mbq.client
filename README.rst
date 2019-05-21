@@ -1,6 +1,6 @@
-###############
+##################
 MBQ Service Client
-###############
+##################
 
 .. image:: https://img.shields.io/pypi/v/mbq.client.svg
     :target: https://pypi.python.org/pypi/mbq.client
