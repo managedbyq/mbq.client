@@ -38,6 +38,7 @@ setuptools.setup(
     ],
     install_requires=[
         'requests>=2.21.0,<3.0.0',
+        'typing_extensions>=3.7.2',
     ],
     keywords='token access authorization',
     packages=setuptools.find_packages(),
