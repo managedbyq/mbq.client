@@ -75,7 +75,7 @@ class OSCoreServiceClient:
         try:
             return self.client.get(
                 f"/api/v1/people/{person_id}/permissions", params={"org_ref": org_ref}
-            )["objects"]
+            )
         except requests.exceptions.HTTPError as e:
             response = getattr(e, "response", None)
             if response and response.status_code // 100 == 4:
@@ -95,7 +95,7 @@ class OSCoreServiceClient:
             return self.client.get(
                 f"/api/v1/people/{person_id}/permissions",
                 params={"location_id": location_id, "location_type": location_type},
-            )["objects"]
+            )
         except requests.exceptions.HTTPError as e:
             response = getattr(e, "response", None)
             if response and response.status_code // 100 == 4:
