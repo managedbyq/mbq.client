@@ -42,5 +42,5 @@ setuptools.setup(
     ],
     keywords='token access authorization',
     packages=setuptools.find_packages(),
-    zip_safe=True,
+    zip_safe=False,
 )
