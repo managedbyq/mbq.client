@@ -78,7 +78,7 @@ class OSCoreServiceClient:
             )
         except requests.exceptions.HTTPError as e:
             response = getattr(e, "response", None)
-            if response and response.status_code // 100 == 4:
+            if response is not None and response.status_code // 100 == 4:
                 raise ClientError("Invalid request") from e
             raise ServerError("Server error") from e
         except Exception as e:
@@ -98,7 +98,7 @@ class OSCoreServiceClient:
             )
         except requests.exceptions.HTTPError as e:
             response = getattr(e, "response", None)
-            if response and response.status_code // 100 == 4:
+            if response is not None and response.status_code // 100 == 4:
                 raise ClientError("Invalid request") from e
             raise ServerError("Server error") from e
         except Exception as e:
@@ -187,9 +187,7 @@ class PermissionsClient:
                 org_ref = ref
 
             joined_scopes = f"{'|'.join(scopes)}|"
-            cache_doc[
-                self._cache_key(person_id, org_ref, ref_type)
-            ] = joined_scopes
+            cache_doc[self._cache_key(person_id, org_ref, ref_type)] = joined_scopes
 
         return cache_doc
 
