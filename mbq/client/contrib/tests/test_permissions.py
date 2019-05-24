@@ -1,6 +1,6 @@
 from typing import Dict
 from unittest import TestCase
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
 from .. import permissions as sut
 
@@ -36,6 +36,8 @@ class PermissionsClientTest(TestCase):
         self.client = sut.PermissionsClient(
             TestOSCoreClient(test_data), cache_name=None
         )
+
+        self.client._collector = MagicMock()
 
     def test_cache_key(self):
         self.assertEqual(

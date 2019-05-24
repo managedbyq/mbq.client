@@ -7,6 +7,8 @@ from uuid import UUID
 import requests
 from typing_extensions import Literal, Protocol
 
+import mbq.metrics
+
 from .. import ServiceClient
 
 
@@ -118,6 +120,7 @@ class PermissionsClient:
     """
 
     _cache_prefix = "permissions_client"
+    _collector = None
 
     def __init__(
         self,
@@ -135,6 +138,20 @@ class PermissionsClient:
         else:
             self.cache = None
             self.cache_period_seconds = None
+
+    @property
+    def collector(self):
+        if self._collector is None:
+            if mbq.metrics._initialized is False:
+                raise RuntimeError("mbq.metrics is not initialized")
+            self._collector = mbq.metrics.Collector(
+                namespace="mbq.client.permissions",
+                tags={
+                    "service": mbq.metrics._service,
+                    "env": mbq.metrics._env.long_name,
+                },
+            )
+        return self._collector
 
     def _cache_key(
         self, person_id: str, ref: Union[str, int], ref_type: Optional[RefType] = None
@@ -158,15 +175,18 @@ class PermissionsClient:
             keys.append(self._cache_key(person_id, org_ref, ref_type))
 
         try:
-            fetched = self.cache.get_many(keys)
+            with self.collector.timed("cache.read.time"):
+                fetched = self.cache.get_many(keys)
         except Exception as e:
             raise ServerError("Error reading from cache") from e
 
         if len(fetched.keys()) != len(keys):
             logger.debug(f"Not all keys found in cache, got: {fetched}")
+            self.collector.increment("cache.read", tags={"result": "miss"})
             return None
 
         logger.debug(f"Successful cache read: {fetched}")
+        self.collector.increment("cache.read", tags={"result": "hit"})
 
         return fetched
 
@@ -195,7 +215,8 @@ class PermissionsClient:
         if self.cache:
             logger.debug(f"Writing to cache: {doc}")
             try:
-                self.cache.set_many(doc, timeout=self.cache_period_seconds)
+                with self.collector.timed("cache.write.time"):
+                    self.cache.set_many(doc, timeout=self.cache_period_seconds)
             except Exception as e:
                 raise ServerError("Error writing to cache") from e
 
@@ -210,6 +231,7 @@ class PermissionsClient:
         org_ref = str(org_ref)
 
         cached_doc = self._cache_read(person_id, org_ref, ref_type)
+
         if not cached_doc:
             if ref_type is not None:
                 fetched_doc = self.os_core_client.fetch_permissions_for_location(
@@ -220,11 +242,12 @@ class PermissionsClient:
             cached_doc = self._cache_transform(person_id, fetched_doc)
             self._cache_write(cached_doc)
 
-        if cached_doc:
-            for scopes in cached_doc.values():
-                if f"{scope}|" in scopes:
-                    return True
+        for scopes in cached_doc.values():
+            if f"{scope}|" in scopes:
+                self.collector.increment("has_permission", tags={"result": "true"})
+                return True
 
+        self.collector.increment("has_permission", tags={"result": "false"})
         return False
 
     def has_global_permission(self, person_id: UUIDType, scope: str) -> bool:

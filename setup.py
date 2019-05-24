@@ -37,6 +37,7 @@ setuptools.setup(
         'Topic :: Software Development :: Libraries',
     ],
     install_requires=[
+        'mbq.metrics>=1.1.1',
         'requests>=2.21.0,<3.0.0',
         'typing_extensions>=3.7.2',
     ],
