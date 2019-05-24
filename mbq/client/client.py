@@ -32,7 +32,7 @@ class ServiceClient:
         if self._headers:
             kwargs['headers'] = dict(self._headers, **kwargs.get('headers', {}))
         else:
-            kwargs['headers'] = {}
+            kwargs['headers'] = kwargs.get('headers', {})
 
         if self.correlation_id_getter is not None:
             cid = self.correlation_id_getter()
