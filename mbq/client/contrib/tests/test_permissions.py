@@ -41,10 +41,11 @@ class PermissionsClientTest(TestCase):
 
     def test_cache_key(self):
         self.assertEqual(
-            self.client._cache_key("person", "123"), "permissions_client:person:123"
+            self.client._cache_key("person", sut.RefSpec("123")),
+            "permissions_client:person:123",
         )
         self.assertEqual(
-            self.client._cache_key("person2", "456", "company"),
+            self.client._cache_key("person2", sut.RefSpec("456", "company")),
             "permissions_client:person2:456:company",
         )
 
@@ -55,7 +56,7 @@ class PermissionsClientTest(TestCase):
 
     def test_cache_read_no_cache(self):
         # Just testing that this doesn't error
-        self.assertEqual(self.client._cache_read("person", "org"), None)
+        self.assertEqual(self.client._cache_read("person", [sut.RefSpec("org")]), None)
 
     def test_cache_read_with_empty_cache(self):
         cache_mock = Mock()
@@ -63,7 +64,7 @@ class PermissionsClientTest(TestCase):
 
         cache_mock.get_many.return_value = {}
 
-        self.assertEqual(self.client._cache_read("person", "org"), None)
+        self.assertEqual(self.client._cache_read("person", [sut.RefSpec("org")]), None)
 
         cache_mock.get_many.assert_called_once_with(
             ["permissions_client:person:global", "permissions_client:person:org"]
@@ -79,7 +80,9 @@ class PermissionsClientTest(TestCase):
         }
         cache_mock.get_many.return_value = cached_doc
 
-        self.assertEqual(self.client._cache_read("person", "org"), cached_doc)
+        self.assertEqual(
+            self.client._cache_read("person", [sut.RefSpec("org")]), cached_doc
+        )
 
         cache_mock.get_many.assert_called_once_with(
             ["permissions_client:person:global", "permissions_client:person:org"]

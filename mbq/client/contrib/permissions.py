@@ -1,6 +1,7 @@
 import logging
 import urllib
 from copy import copy
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Union, cast, overload
 from uuid import UUID
 
@@ -23,6 +24,12 @@ FetchedPermissionsDoc = Dict[str, List[str]]
 # Values are pipe-delimited strings with an additional pipe on the end.
 CachedPermissionsDoc = Dict[str, str]
 RefType = Union[Literal["company", "vendor"]]
+
+
+@dataclass
+class RefSpec:
+    ref: Union[UUIDType, Literal["global"], int]
+    type: Optional[RefType] = None
 
 
 class ClientError(Exception):
@@ -153,26 +160,24 @@ class PermissionsClient:
             )
         return self._collector
 
-    def _cache_key(
-        self, person_id: str, ref: Union[str, int], ref_type: Optional[RefType] = None
-    ) -> str:
-        """ref can be either an org_ref or a legacy int ref here"""
-        if ref_type:
-            return f"{self._cache_prefix}:{person_id}:{ref}:{ref_type}"
-        return f"{self._cache_prefix}:{person_id}:{ref}"
+    def _cache_key(self, person_id: str, spec: RefSpec) -> str:
+        if spec.type is not None:
+            return f"{self._cache_prefix}:{person_id}:{spec.ref}:{spec.type}"
+        return f"{self._cache_prefix}:{person_id}:{spec.ref}"
 
     def _global_cache_key(self, person_id: str) -> str:
         return f"{self._cache_prefix}:{person_id}:global"
 
     def _cache_read(
-        self, person_id: str, org_ref: str, ref_type: Optional[RefType] = None
+        self, person_id: str, ref_specs: List[RefSpec]
     ) -> Optional[CachedPermissionsDoc]:
         if not self.cache:
             return None
 
         keys = [self._global_cache_key(person_id)]
-        if org_ref != "global":
-            keys.append(self._cache_key(person_id, org_ref, ref_type))
+        for spec in ref_specs:
+            if spec.ref != "global":
+                keys.append(self._cache_key(person_id, spec))
 
         try:
             with self.collector.timed("cache.read.time"):
@@ -207,7 +212,9 @@ class PermissionsClient:
                 org_ref = ref
 
             joined_scopes = f"{'|'.join(scopes)}|"
-            cache_doc[self._cache_key(person_id, org_ref, ref_type)] = joined_scopes
+            cache_doc[
+                self._cache_key(person_id, RefSpec(org_ref, ref_type))
+            ] = joined_scopes
 
         return cache_doc
 
@@ -220,25 +227,19 @@ class PermissionsClient:
             except Exception as e:
                 raise ServerError("Error writing to cache") from e
 
-    def _has_permission(
-        self,
-        person_id: UUIDType,
-        scope: str,
-        org_ref: Union[UUIDType, Literal["global"], int],
-        ref_type: Optional[RefType] = None,
-    ) -> bool:
+    def _has_permission(self, person_id: UUIDType, scope: str, spec: RefSpec) -> bool:
         person_id = str(person_id)
-        org_ref = str(org_ref)
 
-        cached_doc = self._cache_read(person_id, org_ref, ref_type)
+        cached_doc = self._cache_read(person_id, [spec])
 
         if not cached_doc:
-            if ref_type is not None:
+            if isinstance(spec.ref, int):
+                assert spec.type is not None
                 fetched_doc = self.os_core_client.fetch_permissions_for_location(
-                    person_id, int(org_ref), ref_type
+                    person_id, spec.ref, spec.type
                 )
             else:
-                fetched_doc = self.os_core_client.fetch_permissions(person_id, org_ref)
+                fetched_doc = self.os_core_client.fetch_permissions(person_id, spec.ref)
             cached_doc = self._cache_transform(person_id, fetched_doc)
             self._cache_write(cached_doc)
 
@@ -251,7 +252,7 @@ class PermissionsClient:
         return False
 
     def has_global_permission(self, person_id: UUIDType, scope: str) -> bool:
-        return self._has_permission(person_id, scope, "global")
+        return self._has_permission(person_id, scope, RefSpec("global"))
 
     @overload  # noqa: F811
     def has_permission(
@@ -272,4 +273,4 @@ class PermissionsClient:
         org_ref: Union[UUIDType, int],
         ref_type: Optional[RefType] = None,
     ) -> bool:
-        return self._has_permission(person_id, scope, org_ref, ref_type)
+        return self._has_permission(person_id, scope, RefSpec(org_ref, ref_type))
