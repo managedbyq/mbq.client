@@ -86,7 +86,7 @@ class OSCoreServiceClient:
 
         try:
             return self.client.get(
-                f"/api/v1/people/{person_id}/permissions", params={"org_ref": org_ref}
+                f"/api/v1/people/{person_id}/permissions/by-org-ref", params={"org_ref": org_ref}
             )
         except requests.exceptions.HTTPError as e:
             response = getattr(e, "response", None)
@@ -105,7 +105,7 @@ class OSCoreServiceClient:
 
         try:
             return self.client.get(
-                f"/api/v1/people/{person_id}/permissions",
+                f"/api/v1/people/{person_id}/permissions/by-location",
                 params={"location_id": location_id, "location_type": location_type},
             )
         except requests.exceptions.HTTPError as e:
@@ -120,7 +120,7 @@ class OSCoreServiceClient:
         logger.debug(f"Fetching all permissions from OS Core: {person_id}")
 
         try:
-            return self.client.get(f"/api/v1/people/{person_id}/permissions")
+            return self.client.get(f"/api/v1/people/{person_id}/permissions/all")
         except requests.exceptions.HTTPError as e:
             response = getattr(e, "response", None)
             if response is not None and response.status_code // 100 == 4:
