@@ -1,5 +1,6 @@
 import logging
 import urllib
+import uuid
 from copy import copy
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Union, cast, overload
@@ -261,14 +262,14 @@ class PermissionsClient:
                 fetched_doc = self.os_core_client.fetch_all_permissions(person_id)
             else:
                 spec = specs[0]
-                if isinstance(spec.ref, int):
-                    assert spec.type is not None
+                if spec.type is not None:
                     logger.debug("Using fetch_permissions_for_location")
                     fetched_doc = self.os_core_client.fetch_permissions_for_location(
-                        person_id, spec.ref, spec.type
+                        person_id, int(spec.ref), spec.type
                     )
                 else:
                     logger.debug("Using fetch_permissions")
+                    assert isinstance(spec.ref, (uuid.UUID, str))
                     fetched_doc = self.os_core_client.fetch_permissions(
                         person_id, spec.ref
                     )
