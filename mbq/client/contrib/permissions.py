@@ -59,6 +59,9 @@ class OSCoreClient(Protocol):
     ) -> FetchedPermissionsDoc:
         ...
 
+    def fetch_all_permissions(self, person_id: str) -> FetchedPermissionsDoc:
+        ...
+
 
 class OSCoreServiceClient:
     def __init__(self, client: ServiceClient):
@@ -105,6 +108,19 @@ class OSCoreServiceClient:
                 f"/api/v1/people/{person_id}/permissions",
                 params={"location_id": location_id, "location_type": location_type},
             )
+        except requests.exceptions.HTTPError as e:
+            response = getattr(e, "response", None)
+            if response is not None and response.status_code // 100 == 4:
+                raise ClientError("Invalid request") from e
+            raise ServerError("Server error") from e
+        except Exception as e:
+            raise ServerError("Server error") from e
+
+    def fetch_all_permissions(self, person_id: str) -> FetchedPermissionsDoc:
+        logger.debug(f"Fetching all permissions from OS Core: {person_id}")
+
+        try:
+            return self.client.get(f"/api/v1/people/{person_id}/permissions")
         except requests.exceptions.HTTPError as e:
             response = getattr(e, "response", None)
             if response is not None and response.status_code // 100 == 4:
@@ -227,32 +243,52 @@ class PermissionsClient:
             except Exception as e:
                 raise ServerError("Error writing to cache") from e
 
-    def _has_permission(self, person_id: UUIDType, scope: str, spec: RefSpec) -> bool:
+    def _has_permission(
+        self, person_id: UUIDType, scope: str, specs: List[RefSpec]
+    ) -> bool:
+        """Returns bool of whether the given person has the given
+        scope on ALL RefSpecs specified.
+        """
         person_id = str(person_id)
 
-        cached_doc = self._cache_read(person_id, [spec])
+        cached_doc = self._cache_read(person_id, specs)
 
         if not cached_doc:
-            if isinstance(spec.ref, int):
-                assert spec.type is not None
-                fetched_doc = self.os_core_client.fetch_permissions_for_location(
-                    person_id, spec.ref, spec.type
-                )
+            if len(specs) > 1 or specs[0].ref == "global":
+                logger.debug("Using fetch_all_permissions")
+                fetched_doc = self.os_core_client.fetch_all_permissions(person_id)
             else:
-                fetched_doc = self.os_core_client.fetch_permissions(person_id, spec.ref)
+                spec = specs[0]
+                if isinstance(spec.ref, int):
+                    assert spec.type is not None
+                    logger.debug("Using fetch_permissions_for_location")
+                    fetched_doc = self.os_core_client.fetch_permissions_for_location(
+                        person_id, spec.ref, spec.type
+                    )
+                else:
+                    logger.debug("Using fetch_permissions")
+                    fetched_doc = self.os_core_client.fetch_permissions(
+                        person_id, spec.ref
+                    )
             cached_doc = self._cache_transform(person_id, fetched_doc)
             self._cache_write(cached_doc)
 
-        for scopes in cached_doc.values():
-            if f"{scope}|" in scopes:
-                self.collector.increment("has_permission", tags={"result": "true"})
-                return True
+        found = True
+        if f"{scope}|" in cached_doc.get(self._global_cache_key(person_id), ""):
+            pass
+        else:
+            for spec in specs:
+                cache_key = self._cache_key(person_id, spec)
+                if f"{scope}|" not in cached_doc.get(cache_key, ""):
+                    found = False
+                    break
 
-        self.collector.increment("has_permission", tags={"result": "false"})
-        return False
+        self.collector.increment("has_permission", tags={"result": found})
+        return found
 
     def has_global_permission(self, person_id: UUIDType, scope: str) -> bool:
-        return self._has_permission(person_id, scope, RefSpec("global"))
+        """Test whether the scope is granted to the person on the global scope."""
+        return self._has_permission(person_id, scope, [RefSpec("global")])
 
     @overload  # noqa: F811
     def has_permission(
@@ -273,4 +309,39 @@ class PermissionsClient:
         org_ref: Union[UUIDType, int],
         ref_type: Optional[RefType] = None,
     ) -> bool:
-        return self._has_permission(person_id, scope, RefSpec(org_ref, ref_type))
+        """Test whether the scope is granted to the person on the
+        provided org or location references.
+
+        This should not be used to test for explicit global permissions, prefer
+        has_global_permission instead.
+        """
+        return self._has_permission(person_id, scope, [RefSpec(org_ref, ref_type)])
+
+    @overload  # noqa: F811
+    def has_all_permissions(
+        self, person_id: UUIDType, scope: str, *, org_refs: List[UUIDType]
+    ) -> bool:
+        ...
+
+    @overload  # noqa: F811
+    def has_all_permissions(
+        self, person_id: UUIDType, scope: str, *, org_refs: List[int], ref_type: RefType
+    ) -> bool:
+        ...
+
+    def has_all_permissions(  # noqa: F811
+        self,
+        person_id: UUIDType,
+        scope: str,
+        *,
+        org_refs: Union[List[UUIDType], List[int]],
+        ref_type: Optional[RefType] = None,
+    ) -> bool:
+        """Test whether the scope is granted to the person on ALL of the
+        provided org or location references.
+
+        This should not be used to test for explicit global permissions, prefer
+        has_global_permission instead.
+        """
+        specs = [RefSpec(ref, ref_type) for ref in org_refs]
+        return self._has_permission(person_id, scope, specs)

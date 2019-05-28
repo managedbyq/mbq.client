@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Dict
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock
@@ -24,12 +25,17 @@ class TestOSCoreClient:
         result.update({key: self.data.get(key, [])})
         return result
 
+    def fetch_all_permissions(self, person_id: str) -> sut.FetchedPermissionsDoc:
+        return deepcopy(self.data)
+
 
 class PermissionsClientTest(TestCase):
     def setUp(self):
         test_data = {
             "org": ["read:invoices"],
+            "org2": ["read:invoices", "write:invoices"],
             "company:1": ["read:orders", "write:orders"],
+            "company:2": ["read:orders"],
             "vendor:2": ["read:team"],
             "global": ["read:global"],
         }
@@ -147,3 +153,40 @@ class PermissionsClientTest(TestCase):
     def test_has_global_permission(self):
         self.assertTrue(self.client.has_global_permission("person", "read:global"))
         self.assertFalse(self.client.has_global_permission("person", "read:stuff"))
+
+    def test_has_all_permissions(self):
+        self.assertTrue(
+            self.client.has_all_permissions(
+                "person", "read:orders", org_refs=[1, 2], ref_type="company"
+            )
+        )
+        self.assertFalse(
+            self.client.has_all_permissions(
+                "person", "write:orders", org_refs=[1, 2], ref_type="company"
+            )
+        )
+        self.assertTrue(
+            self.client.has_all_permissions(
+                "person", "read:orders", org_refs=[1], ref_type="company"
+            )
+        )
+
+        self.assertTrue(
+            self.client.has_all_permissions(
+                "person", "read:invoices", org_refs=["org", "org2"]
+            )
+        )
+        self.assertFalse(
+            self.client.has_all_permissions(
+                "person", "write:invoices", org_refs=["org", "org2"]
+            )
+        )
+
+        self.assertTrue(
+            self.client.has_all_permissions(
+                "person", "read:global", org_refs=[1, 2, 3, 4, 5], ref_type="vendor"
+            )
+        )
+        self.assertTrue(
+            self.client.has_all_permissions("person", "read:global", org_refs=["org"])
+        )
