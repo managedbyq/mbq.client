@@ -11,7 +11,7 @@ class CorrelationIDTestCase(TestCase):
             'https://foo.com/',
             correlation_id_getter=lambda: 'hello-world'
         )
-        with patch('requests.get') as requests_mock:
+        with patch('requests.Session.get') as requests_mock:
             self.client.get('/url')
             self.assertEqual(1, requests_mock.call_count)
             headers = requests_mock.call_args[1]['headers']
@@ -19,7 +19,7 @@ class CorrelationIDTestCase(TestCase):
 
     def test_correlation_id_getter_not_provided(self):
         self.client = ServiceClient('https://foo.com/')
-        with patch('requests.get') as requests_mock:
+        with patch('requests.Session.get') as requests_mock:
             self.client.get('/url')
             self.assertEqual(1, requests_mock.call_count)
             headers = requests_mock.call_args[1]['headers']
@@ -33,7 +33,7 @@ class CorrelationIDTestCase(TestCase):
             correlation_id_getter=cid_getter_mock
         )
 
-        with patch('requests.get') as requests_mock:
+        with patch('requests.Session.get') as requests_mock:
             self.client.get('/url')
             self.assertEqual(1, requests_mock.call_count)
             headers = requests_mock.call_args[1]['headers']
@@ -45,7 +45,7 @@ class CorrelationIDTestCase(TestCase):
             self.assertEqual('goodbye-world', headers.get('X-Correlation-Id'))
 
     def test_headers(self):
-        with patch('requests.get') as requests_mock:
+        with patch('requests.Session.get') as requests_mock:
             self.client = ServiceClient(
                 'https://foo.com/',
                 headers={'Test-Header': 'header-value'}
@@ -54,7 +54,7 @@ class CorrelationIDTestCase(TestCase):
             headers = requests_mock.call_args[1]['headers']
             self.assertEqual('header-value', headers.get('Test-Header'))
 
-        with patch('requests.get') as requests_mock:
+        with patch('requests.Session.get') as requests_mock:
             self.client = ServiceClient(
                 'https://foo.com/',
             )
@@ -62,7 +62,7 @@ class CorrelationIDTestCase(TestCase):
             headers = requests_mock.call_args[1]['headers']
             self.assertEqual('get-header-value', headers.get('Test-Get-Header'))
 
-        with patch('requests.get') as requests_mock:
+        with patch('requests.Session.get') as requests_mock:
             self.client = ServiceClient(
                 'https://foo.com/',
                 headers={'Test-Service-Header': 'service-header-value'}

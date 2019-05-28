@@ -20,6 +20,7 @@ class ServiceClient:
         self._post_process_response = post_process_response
         self._timeout = default_timeout
         self.correlation_id_getter = correlation_id_getter
+        self.session = requests.Session()
 
     def _make_url(self, url):
         parsed = urlparse(url)
@@ -47,7 +48,7 @@ class ServiceClient:
 
         url = self._make_url(url)
 
-        response = getattr(requests, method)(url, *args, **kwargs)
+        response = getattr(self.session, method)(url, *args, **kwargs)
 
         try:
             response.raise_for_status()
