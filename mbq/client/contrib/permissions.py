@@ -86,7 +86,8 @@ class OSCoreServiceClient:
 
         try:
             return self.client.get(
-                f"/api/v1/people/{person_id}/permissions/by-org-ref", params={"org_ref": org_ref}
+                f"/api/v1/people/{person_id}/permissions/by-org-ref",
+                params={"org_ref": org_ref},
             )
         except requests.exceptions.HTTPError as e:
             response = getattr(e, "response", None)
@@ -240,6 +241,7 @@ class PermissionsClient:
             try:
                 with self.collector.timed("cache.write.time"):
                     self.cache.set_many(doc, timeout=self.cache_period_seconds)
+                self.collector.increment("cache.write")
             except Exception as e:
                 raise ServerError("Error writing to cache") from e
 
@@ -283,12 +285,14 @@ class PermissionsClient:
                     found = False
                     break
 
-        self.collector.increment("has_permission", tags={"result": found})
         return found
 
     def has_global_permission(self, person_id: UUIDType, scope: str) -> bool:
         """Test whether the scope is granted to the person on the global scope."""
-        return self._has_permission(person_id, scope, [RefSpec("global")])
+        with self.collector.timed("has_global_permission.time"):
+            result = self._has_permission(person_id, scope, [RefSpec("global")])
+        self.collector.increment("has_global_permission", tags={"result": str(result)})
+        return result
 
     @overload  # noqa: F811
     def has_permission(
@@ -315,7 +319,12 @@ class PermissionsClient:
         This should not be used to test for explicit global permissions, prefer
         has_global_permission instead.
         """
-        return self._has_permission(person_id, scope, [RefSpec(org_ref, ref_type)])
+        with self.collector.timed("has_permission.time"):
+            result = self._has_permission(
+                person_id, scope, [RefSpec(org_ref, ref_type)]
+            )
+        self.collector.increment("has_permission", tags={"result": str(result)})
+        return result
 
     @overload  # noqa: F811
     def has_all_permissions(
@@ -343,5 +352,8 @@ class PermissionsClient:
         This should not be used to test for explicit global permissions, prefer
         has_global_permission instead.
         """
-        specs = [RefSpec(ref, ref_type) for ref in org_refs]
-        return self._has_permission(person_id, scope, specs)
+        with self.collector.timed("has_all_permissions.time"):
+            specs = [RefSpec(ref, ref_type) for ref in org_refs]
+            result = self._has_permission(person_id, scope, specs)
+        self.collector.increment("has_all_permissions", tags={"result": str(result)})
+        return result
