@@ -290,9 +290,18 @@ class PermissionsClient:
 
     def has_global_permission(self, person_id: UUIDType, scope: str) -> bool:
         """Test whether the scope is granted to the person on the global scope."""
-        with self.collector.timed("has_global_permission.time"):
+        with self.collector.timed(
+            "has_permission.time", tags={"call": "has_global_permission"}
+        ):
             result = self._has_permission(person_id, scope, [RefSpec("global")])
-        self.collector.increment("has_global_permission", tags={"result": str(result)})
+        self.collector.increment(
+            "has_permission",
+            tags={
+                "call": "has_global_permission",
+                "result": str(result),
+                "scope": scope,
+            },
+        )
         return result
 
     @overload  # noqa: F811
@@ -320,11 +329,16 @@ class PermissionsClient:
         This should not be used to test for explicit global permissions, prefer
         has_global_permission instead.
         """
-        with self.collector.timed("has_permission.time"):
+        with self.collector.timed(
+            "has_permission.time", tags={"call": "has_permission"}
+        ):
             result = self._has_permission(
                 person_id, scope, [RefSpec(org_ref, ref_type)]
             )
-        self.collector.increment("has_permission", tags={"result": str(result)})
+        self.collector.increment(
+            "has_permission",
+            tags={"call": "has_permission", "result": str(result), "scope": scope},
+        )
         return result
 
     @overload  # noqa: F811
@@ -353,8 +367,13 @@ class PermissionsClient:
         This should not be used to test for explicit global permissions, prefer
         has_global_permission instead.
         """
-        with self.collector.timed("has_all_permissions.time"):
+        with self.collector.timed(
+            "has_permission.time", tags={"type": "has_all_permissions"}
+        ):
             specs = [RefSpec(ref, ref_type) for ref in org_refs]
             result = self._has_permission(person_id, scope, specs)
-        self.collector.increment("has_all_permissions", tags={"result": str(result)})
+        self.collector.increment(
+            "has_permission",
+            tags={"call": "has_all_permissions", "result": str(result), "scope": scope},
+        )
         return result
