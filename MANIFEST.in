@@ -1,1 +1,1 @@
-include py.typed
+include mbq/client/py.typed
