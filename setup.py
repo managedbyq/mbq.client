@@ -44,5 +44,6 @@ setuptools.setup(
     ],
     keywords='token access authorization',
     packages=setuptools.find_packages(),
+    package_data={"mbq.client": ["py.typed"]},
     zip_safe=False,
 )
