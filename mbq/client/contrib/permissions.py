@@ -1,9 +1,10 @@
 import logging
 import urllib
 import uuid
+from collections import defaultdict
 from copy import copy
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Union, cast, overload
+from typing import Callable, Dict, List, Optional, Union, cast, overload
 from uuid import UUID
 
 import requests
@@ -132,6 +133,35 @@ class OSCoreServiceClient:
             raise ServerError("Server error") from e
 
 
+class Registrar:
+    def __init__(self):
+        self._callback_error_name = "callback_error"
+        self._registry: Dict[str, List[Callable[..., None]]] = defaultdict(list)
+
+    def register_error_handler(self, fn: Callable[[str, Exception], None]) -> None:
+        """ Use this method to add a callback (fn) which will be executed when a callback
+        raises an exception
+        """
+        self._registry[self._callback_error_name].append(fn)
+
+    def register(self, name: str, fn: Callable[..., None]) -> None:
+        """ Use this method to add a callback (fn) which will be executed when an event
+        (name) is emitted
+        """
+        self._registry[name].append(fn)
+
+    def emit(self, name: str, *args, **kwargs) -> None:
+        """ Use this method to emit an event and trigger registered callbacks"""
+        for fn in self._registry[name]:
+            try:
+                fn(*args, **kwargs)
+            except Exception as e:
+                if name != self._callback_error_name:
+                    self.emit(self._callback_error_name, name, e)
+                else:
+                    raise
+
+
 class PermissionsClient:
     """Cache-aware client for consuming the Permissions API from OS Core.
 
@@ -153,6 +183,7 @@ class PermissionsClient:
         cache_name="default",
         cache_period_seconds=120,
     ):
+        self.registrar = Registrar()
         self.os_core_client = os_core_client
 
         if cache_name is not None:
@@ -302,6 +333,9 @@ class PermissionsClient:
                 "scope": scope,
             },
         )
+        self.registrar.emit(
+            "has_global_permission_completed", person_id, scope, result=result
+        )
         return result
 
     @overload  # noqa: F811
@@ -339,6 +373,14 @@ class PermissionsClient:
             "has_permission",
             tags={"call": "has_permission", "result": str(result), "scope": scope},
         )
+        self.registrar.emit(
+            "has_permission_completed",
+            person_id,
+            scope,
+            org_ref,
+            ref_type=ref_type,
+            result=result,
+        )
         return result
 
     @overload  # noqa: F811
@@ -375,5 +417,13 @@ class PermissionsClient:
         self.collector.increment(
             "has_permission",
             tags={"call": "has_all_permissions", "result": str(result), "scope": scope},
+        )
+        self.registrar.emit(
+            "has_all_permissions_completed",
+            person_id,
+            scope,
+            org_refs=org_refs,
+            ref_type=ref_type,
+            result=result,
         )
         return result

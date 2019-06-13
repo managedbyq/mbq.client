@@ -6,6 +6,42 @@ from unittest.mock import MagicMock, Mock
 from .. import permissions as sut
 
 
+class TestRegistrar(TestCase):
+    def setUp(self):
+        self.registrar = sut.Registrar()
+
+    def test_register_and_emit(self):
+        test_fn = Mock()
+        self.registrar.register("test_event", test_fn)
+
+        self.registrar.emit("test_event", "arg_1", "arg_2", arg3="arg3", arg4="arg4")
+
+        test_fn.assert_called_once_with(
+            "arg_1", "arg_2", arg3="arg3", arg4="arg4"
+        )
+
+    def test_emit_unregistered(self):
+        test_fn = Mock()
+        self.registrar.emit("test_event", "arg_1", "arg_2", arg3="arg3", arg4="arg4")
+        test_fn.assert_not_called()
+
+    def test_register_error_handler(self):
+        test_fn_raises_exception = Mock()
+        exception = Exception("here comes the boom")
+        test_fn_raises_exception.side_effect = exception
+        error_handler_fn = Mock()
+
+        self.registrar.register("test_event", test_fn_raises_exception)
+        self.registrar.register_error_handler(error_handler_fn)
+
+        self.registrar.emit("test_event", "arg_1", "arg_2", arg3="arg3", arg4="arg4")
+
+        test_fn_raises_exception.assert_called_once_with(
+            "arg_1", "arg_2", arg3="arg3", arg4="arg4"
+        )
+        error_handler_fn.assert_called_once_with("test_event", exception)
+
+
 class TestOSCoreClient:
     def __init__(self, data):
         self.data = data
@@ -124,6 +160,46 @@ class PermissionsClientTest(TestCase):
 
         self.client._cache_write(cached_doc)
         cache_mock.set_many.assert_called_once_with(cached_doc, timeout=123)
+
+    def test_registered_hooks_has_permission_org(self):
+        test_example_fn = Mock()
+        self.client.registrar.register("has_permission_completed", test_example_fn)
+        self.assertTrue(self.client.has_permission("person", "read:invoices", "org"))
+        test_example_fn.assert_any_call(
+            "person", "read:invoices", "org", ref_type=None, result=True
+        )
+
+    def test_registered_hooks_has_permission_location(self):
+        test_example_fn = Mock()
+        self.client.registrar.register("has_permission_completed", test_example_fn)
+        self.assertTrue(
+            self.client.has_permission("person", "read:orders", 1, "company")
+        )
+        test_example_fn.assert_any_call(
+            "person", "read:orders", 1, ref_type="company", result=True
+        )
+
+    def test_registered_hooks_has_all_permissions(self):
+        test_example_fn = Mock()
+        self.client.registrar.register(
+            "has_all_permissions_completed", test_example_fn
+        )
+        self.assertTrue(
+            self.client.has_all_permissions(
+                "person", "read:orders", org_refs=[1, 2], ref_type="company"
+            )
+        )
+        test_example_fn.assert_any_call(
+            "person", "read:orders", org_refs=[1, 2], ref_type="company", result=True
+        )
+
+    def test_registered_hooks_has_global_permissions(self):
+        test_example_fn = Mock()
+        self.client.registrar.register(
+            "has_global_permission_completed", test_example_fn
+        )
+        self.assertTrue(self.client.has_global_permission("person", "read:global"))
+        test_example_fn.assert_any_call("person", "read:global", result=True)
 
     def test_has_permission_org(self):
         self.assertTrue(self.client.has_permission("person", "read:invoices", "org"))
