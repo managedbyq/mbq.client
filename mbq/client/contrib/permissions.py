@@ -460,6 +460,12 @@ class PermissionsClient:
         result = self.os_core_client.fetch_org_refs_for_permission(person_id, scope)
         self.collector.increment(
             "org_refs_for_permission",
-            tags={"call": "org_refs_for_permission", "result": str(result), "scope": scope},
+            tags={"call": "org_refs_for_permission", "scope": scope},
+        )
+        self.registrar.emit(
+            "get_org_refs_for_permissions_completed",
+            person_id,
+            scope,
+            result=result
         )
         return result

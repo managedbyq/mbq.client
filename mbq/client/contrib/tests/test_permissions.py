@@ -284,3 +284,13 @@ class PermissionsClientTest(TestCase):
         self.assertEqual(
             set(self.client.get_org_refs_for_permission("person", "read:stuff")), set()
         )
+
+    def test_registered_hooks_test_get_org_refs_for_permission(self):
+        test_example_fn = Mock()
+        self.client.registrar.register(
+            "get_org_refs_for_permissions_completed", test_example_fn
+        )
+
+        org_refs = self.client.get_org_refs_for_permission("person", "read:invoices")
+
+        test_example_fn.assert_any_call("person", "read:invoices", result=org_refs)
