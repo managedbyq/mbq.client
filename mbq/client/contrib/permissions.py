@@ -4,8 +4,7 @@ import uuid
 from collections import defaultdict
 from copy import copy
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Union, cast, overload
-from uuid import UUID
+from typing import Callable, Dict, Iterable, List, Optional, Union, cast, overload
 
 import requests
 from typing_extensions import Literal, Protocol
@@ -17,7 +16,7 @@ from .. import ServiceClient
 
 logger = logging.getLogger(__name__)
 
-UUIDType = Union[str, UUID]
+UUIDType = Union[str, uuid.UUID]
 # External type returned from internal and external OS Core clients. Keys
 # are the org refs if UUIDs, or {ref_type}:{ref_id} if legacy int types.
 # Values are lists of scopes. Should also include a "global" literal key.
@@ -52,16 +51,21 @@ class ServerError(Exception):
 
 class OSCoreClient(Protocol):
     def fetch_permissions(
-        self, person_id: str, org_ref: UUIDType
+        self, person_id: UUIDType, org_ref: UUIDType
     ) -> FetchedPermissionsDoc:
         ...
 
     def fetch_permissions_for_location(
-        self, person_id: str, location_id: int, location_type: RefType
+        self, person_id: UUIDType, location_id: int, location_type: RefType
     ) -> FetchedPermissionsDoc:
         ...
 
-    def fetch_all_permissions(self, person_id: str) -> FetchedPermissionsDoc:
+    def fetch_all_permissions(self, person_id: UUIDType) -> FetchedPermissionsDoc:
+        ...
+
+    def fetch_org_refs_for_permission(
+        self, person_id: UUIDType, scope: str
+    ) -> Iterable[str]:
         ...
 
 
@@ -82,7 +86,7 @@ class OSCoreServiceClient:
         self.client._api_url = f"{parsed.scheme}://{parsed.netloc}"
 
     def fetch_permissions(
-        self, person_id: str, org_ref: UUIDType
+        self, person_id: UUIDType, org_ref: UUIDType
     ) -> FetchedPermissionsDoc:
         logger.debug(f"Fetching permissions from OS Core: {person_id}, {org_ref}")
 
@@ -100,7 +104,7 @@ class OSCoreServiceClient:
             raise ServerError("Server error") from e
 
     def fetch_permissions_for_location(
-        self, person_id: str, location_id: int, location_type: RefType
+        self, person_id: UUIDType, location_id: int, location_type: RefType
     ) -> FetchedPermissionsDoc:
         logger.debug(
             f"Fetching permissions from OS Core: {person_id}, {location_type} {location_id}"
@@ -119,11 +123,28 @@ class OSCoreServiceClient:
         except Exception as e:
             raise ServerError("Server error") from e
 
-    def fetch_all_permissions(self, person_id: str) -> FetchedPermissionsDoc:
+    def fetch_all_permissions(self, person_id: UUIDType) -> FetchedPermissionsDoc:
         logger.debug(f"Fetching all permissions from OS Core: {person_id}")
 
         try:
             return self.client.get(f"/api/v1/people/{person_id}/permissions/all")
+        except requests.exceptions.HTTPError as e:
+            response = getattr(e, "response", None)
+            if response is not None and response.status_code // 100 == 4:
+                raise ClientError("Invalid request") from e
+            raise ServerError("Server error") from e
+        except Exception as e:
+            raise ServerError("Server error") from e
+
+    def fetch_org_refs_for_permission(
+        self, person_id: UUIDType, scope: str
+    ) -> Iterable[str]:
+        logger.debug(f"Fetching all orgs for which Person {person_id} has permission '{scope}'")
+
+        try:
+            return self.client.get(
+                f"/api/v1/people/{person_id}/permissions/{scope}/orgs"
+            )["objects"]
         except requests.exceptions.HTTPError as e:
             response = getattr(e, "response", None)
             if response is not None and response.status_code // 100 == 4:
@@ -425,5 +446,20 @@ class PermissionsClient:
             org_refs=org_refs,
             ref_type=ref_type,
             result=result,
+        )
+        return result
+
+    def get_org_refs_for_permission(
+        self,
+        person_id: UUIDType,
+        scope: str,
+    ) -> Iterable[str]:
+        """ Given a person and permission scope return all of the org or
+        location references where the person has that permission.
+        """
+        result = self.os_core_client.fetch_org_refs_for_permission(person_id, scope)
+        self.collector.increment(
+            "org_refs_for_permission",
+            tags={"call": "org_refs_for_permission", "result": str(result), "scope": scope},
         )
         return result

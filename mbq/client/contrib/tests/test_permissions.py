@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Dict
+from typing import Dict, Iterable, Union
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock
 
@@ -63,6 +63,11 @@ class TestOSCoreClient:
 
     def fetch_all_permissions(self, person_id: str) -> sut.FetchedPermissionsDoc:
         return deepcopy(self.data)
+
+    def fetch_org_refs_for_permission(
+        self, person_id: str, scope: str
+    ) -> Iterable[Union[sut.UUIDType, str]]:
+        return [name for (name, scopes) in self.data.items() if scope in self.data[name]]
 
 
 class PermissionsClientTest(TestCase):
@@ -265,4 +270,17 @@ class PermissionsClientTest(TestCase):
         )
         self.assertTrue(
             self.client.has_all_permissions("person", "read:global", org_refs=["org"])
+        )
+
+    def test_get_org_refs_for_permission(self):
+        self.assertEqual(
+            set(self.client.get_org_refs_for_permission("person", "read:invoices")),
+            {"org", "org2"}
+        )
+        self.assertEqual(
+            set(self.client.get_org_refs_for_permission("person", "read:orders")),
+            {"company:1", "company:2"}
+        )
+        self.assertEqual(
+            set(self.client.get_org_refs_for_permission("person", "read:stuff")), set()
         )
