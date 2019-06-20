@@ -288,7 +288,7 @@ class PermissionsClientTest(TestCase):
     def test_registered_hooks_test_get_org_refs_for_permission(self):
         test_example_fn = Mock()
         self.client.registrar.register(
-            "get_org_refs_for_permissions_completed", test_example_fn
+            "get_org_refs_for_permission_completed", test_example_fn
         )
 
         org_refs = self.client.get_org_refs_for_permission("person", "read:invoices")

@@ -463,7 +463,7 @@ class PermissionsClient:
             tags={"call": "org_refs_for_permission", "scope": scope},
         )
         self.registrar.emit(
-            "get_org_refs_for_permissions_completed",
+            "get_org_refs_for_permission_completed",
             person_id,
             scope,
             result=result
