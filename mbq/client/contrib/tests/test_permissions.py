@@ -16,9 +16,7 @@ class TestRegistrar(TestCase):
 
         self.registrar.emit("test_event", "arg_1", "arg_2", arg3="arg3", arg4="arg4")
 
-        test_fn.assert_called_once_with(
-            "arg_1", "arg_2", arg3="arg3", arg4="arg4"
-        )
+        test_fn.assert_called_once_with("arg_1", "arg_2", arg3="arg3", arg4="arg4")
 
     def test_emit_unregistered(self):
         test_fn = Mock()
@@ -67,17 +65,22 @@ class TestOSCoreClient:
     def fetch_org_refs_for_permission(
         self, person_id: str, scope: str
     ) -> Iterable[Union[sut.UUIDType, str]]:
-        return [name for (name, scopes) in self.data.items() if scope in self.data[name]]
+        return [
+            name for (name, scopes) in self.data.items() if scope in self.data[name]
+        ]
 
 
 class PermissionsClientTest(TestCase):
     def setUp(self):
         test_data = {
             "org": ["read:invoices"],
+            "vendor:1": ["read:orders", "read:team"],
             "org2": ["read:invoices", "write:invoices"],
-            "company:1": ["read:orders", "write:orders"],
-            "company:2": ["read:orders"],
-            "vendor:2": ["read:team"],
+            "company:1": ["read:orders", "write:orders", "read:invoices"],
+            "company:2": ["read:orders", "read:invoices"],
+            "vendor:2": ["read:orders", "read:team"],
+            "vendor:3": ["read:orders", "read:team", "read:invoices"],
+            "vendor:4": ["read:invoices"],
             "global": ["read:global"],
         }
         self.client = sut.PermissionsClient(
@@ -186,9 +189,7 @@ class PermissionsClientTest(TestCase):
 
     def test_registered_hooks_has_all_permissions(self):
         test_example_fn = Mock()
-        self.client.registrar.register(
-            "has_all_permissions_completed", test_example_fn
-        )
+        self.client.registrar.register("has_all_permissions_completed", test_example_fn)
         self.assertTrue(
             self.client.has_all_permissions(
                 "person", "read:orders", org_refs=[1, 2], ref_type="company"
@@ -274,15 +275,12 @@ class PermissionsClientTest(TestCase):
 
     def test_get_org_refs_for_permission(self):
         self.assertEqual(
-            set(self.client.get_org_refs_for_permission("person", "read:invoices")),
-            {"org", "org2"}
+            self.client.get_org_refs_for_permission("person", "read:invoices"),
+            sut.ConvenientOrgRefs(set(["org", "org2"]), set([1, 2]), set([3, 4])),
         )
         self.assertEqual(
-            set(self.client.get_org_refs_for_permission("person", "read:orders")),
-            {"company:1", "company:2"}
-        )
-        self.assertEqual(
-            set(self.client.get_org_refs_for_permission("person", "read:stuff")), set()
+            self.client.get_org_refs_for_permission("person", "read:stuff"),
+            sut.ConvenientOrgRefs(),
         )
 
     def test_registered_hooks_test_get_org_refs_for_permission(self):
@@ -291,6 +289,23 @@ class PermissionsClientTest(TestCase):
             "get_org_refs_for_permission_completed", test_example_fn
         )
 
-        org_refs = self.client.get_org_refs_for_permission("person", "read:invoices")
+        self.client.get_org_refs_for_permission("person", "read:invoices")
 
-        test_example_fn.assert_any_call("person", "read:invoices", result=org_refs)
+        test_example_fn.assert_any_call(
+            "person",
+            "read:invoices",
+            result=sut.ConvenientOrgRefs(
+                {"org", "org2"}, {1, 2}, {3, 4}
+            ),
+        )
+
+    def test_parse_raw_org_refs(self):
+        raw_org_refs = ["vendor:3", "org2", "company:1", "org", "company:2", "vendor:4"]
+        self.assertEqual(
+            self.client._parse_raw_org_refs(raw_org_refs),
+            sut.ConvenientOrgRefs(set(["org", "org2"]), set([1, 2]), set([3, 4])),
+        )
+        self.assertEqual(
+            self.client._parse_raw_org_refs([]),
+            sut.ConvenientOrgRefs(set(), set(), set()),
+        )

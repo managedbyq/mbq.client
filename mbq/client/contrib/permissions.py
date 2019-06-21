@@ -3,8 +3,8 @@ import urllib
 import uuid
 from collections import defaultdict
 from copy import copy
-from dataclasses import dataclass
-from typing import Callable, Dict, Iterable, List, Optional, Union, cast, overload
+from dataclasses import dataclass, field
+from typing import Callable, Dict, Iterable, List, Optional, Set, Union, cast, overload
 
 import requests
 from typing_extensions import Literal, Protocol
@@ -31,6 +31,13 @@ RefType = Union[Literal["company", "vendor"]]
 class RefSpec:
     ref: Union[UUIDType, Literal["global"], int]
     type: Optional[RefType] = None
+
+
+@dataclass
+class ConvenientOrgRefs:
+    org_refs: Set[UUIDType] = field(default_factory=set)
+    company_ids: Set[int] = field(default_factory=set)
+    vendor_ids: Set[int] = field(default_factory=set)
 
 
 class ClientError(Exception):
@@ -139,7 +146,9 @@ class OSCoreServiceClient:
     def fetch_org_refs_for_permission(
         self, person_id: UUIDType, scope: str
     ) -> Iterable[str]:
-        logger.debug(f"Fetching all orgs for which Person {person_id} has permission '{scope}'")
+        logger.debug(
+            f"Fetching all orgs for which Person {person_id} has permission '{scope}'"
+        )
 
         try:
             return self.client.get(
@@ -449,23 +458,32 @@ class PermissionsClient:
         )
         return result
 
+    def _parse_raw_org_refs(self, raw_org_refs: Iterable[str]) -> ConvenientOrgRefs:
+        company_ids, vendor_ids, org_refs = set(), set(), set()
+        for raw_ref in raw_org_refs:
+            if raw_ref.startswith("company"):
+                company_ids.add(int(raw_ref.split(":")[1]))
+            elif raw_ref.startswith("vendor"):
+                vendor_ids.add(int(raw_ref.split(":")[1]))
+            else:
+                org_refs.add(raw_ref)
+
+        return ConvenientOrgRefs(org_refs, company_ids, vendor_ids)
+
     def get_org_refs_for_permission(
-        self,
-        person_id: UUIDType,
-        scope: str,
-    ) -> Iterable[str]:
+        self, person_id: UUIDType, scope: str
+    ) -> ConvenientOrgRefs:
         """ Given a person and permission scope return all of the org or
         location references where the person has that permission.
         """
-        result = self.os_core_client.fetch_org_refs_for_permission(person_id, scope)
+        result = self._parse_raw_org_refs(
+            self.os_core_client.fetch_org_refs_for_permission(person_id, scope)
+        )
         self.collector.increment(
             "org_refs_for_permission",
             tags={"call": "org_refs_for_permission", "scope": scope},
         )
         self.registrar.emit(
-            "get_org_refs_for_permission_completed",
-            person_id,
-            scope,
-            result=result
+            "get_org_refs_for_permission_completed", person_id, scope, result=result
         )
         return result
