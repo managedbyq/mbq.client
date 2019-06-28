@@ -35,7 +35,7 @@ class RefSpec:
 
 @dataclass
 class ConvenientOrgRefs:
-    org_refs: Set[UUIDType] = field(default_factory=set)
+    org_refs: Set[str] = field(default_factory=set)
     company_ids: Set[int] = field(default_factory=set)
     vendor_ids: Set[int] = field(default_factory=set)
 
