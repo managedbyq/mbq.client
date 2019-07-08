@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Dict, Iterable, Union
+from typing import Dict, List, Union
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock
 
@@ -47,41 +47,66 @@ class TestOSCoreClient:
     def fetch_permissions(
         self, person_id: str, org_ref: sut.UUIDType
     ) -> sut.FetchedPermissionsDoc:
-        result: Dict = {"global": self.data.get("global", [])}
-        result.update({org_ref: self.data.get(org_ref, [])})
+        result: Dict = {"global": self.data[person_id].get("global", [])}
+        result.update({org_ref: self.data[person_id].get(org_ref, [])})
         return result
 
     def fetch_permissions_for_location(
         self, person_id: str, location_id: int, location_type: sut.RefType
     ) -> sut.FetchedPermissionsDoc:
-        result: Dict = {"global": self.data.get("global", [])}
+        result: Dict = {"global": self.data[person_id].get("global", [])}
         key = f"{location_type}:{location_id}"
-        result.update({key: self.data.get(key, [])})
+        result.update({key: self.data[person_id].get(key, [])})
         return result
 
     def fetch_all_permissions(self, person_id: str) -> sut.FetchedPermissionsDoc:
-        return deepcopy(self.data)
+        return deepcopy(self.data[person_id])
 
     def fetch_org_refs_for_permission(
         self, person_id: str, scope: str
-    ) -> Iterable[Union[sut.UUIDType, str]]:
+    ) -> List[Union[sut.UUIDType, str]]:
         return [
-            name for (name, scopes) in self.data.items() if scope in self.data[name]
+            name for (name, scopes) in self.data[person_id].items()
+            if scope in self.data[person_id][name]
+        ]
+
+    def fetch_persons_with_permission(
+        self, scope: str, org_ref: sut.UUIDType
+    ) -> List[str]:
+        return [
+            person_id for person_id, permissions in self.data.items()
+            if scope in permissions.get(org_ref, [])
+        ]
+
+    def fetch_persons_with_permission_for_location(
+        self, scope: str, ref_type: sut.RefType, org_ref: int
+    ) -> List[str]:
+        return [
+            person_id for person_id, permissions in self.data.items()
+            if scope in permissions.get(f"{ref_type}:{org_ref}", [])
         ]
 
 
 class PermissionsClientTest(TestCase):
     def setUp(self):
         test_data = {
-            "org": ["read:invoices"],
-            "vendor:1": ["read:orders", "read:team"],
-            "org2": ["read:invoices", "write:invoices"],
-            "company:1": ["read:orders", "write:orders", "read:invoices"],
-            "company:2": ["read:orders", "read:invoices"],
-            "vendor:2": ["read:orders", "read:team"],
-            "vendor:3": ["read:orders", "read:team", "read:invoices"],
-            "vendor:4": ["read:invoices"],
-            "global": ["read:global"],
+            "person_1": {
+                "org": ["read:invoices"],
+                "vendor:1": ["read:orders", "read:team"],
+                "org2": ["read:invoices", "write:invoices"],
+                "company:1": ["read:orders", "write:orders", "read:invoices"],
+                "company:2": ["read:orders", "read:invoices"],
+                "vendor:2": ["read:orders", "read:team"],
+                "vendor:3": ["read:orders", "read:team", "read:invoices"],
+                "vendor:4": ["read:invoices"],
+                "global": ["read:global"],
+            },
+            "person_2": {
+                "org": ["read:invoices"],
+                "company:1": ["read:orders", "write:orders", "read:invoices"],
+                "org3": ["read:invoices"],
+                "company:3": ["read:orders", "write:orders", "read:invoices"],
+            }
         }
         self.client = sut.PermissionsClient(
             TestOSCoreClient(test_data), cache_name=None
@@ -91,8 +116,8 @@ class PermissionsClientTest(TestCase):
 
     def test_cache_key(self):
         self.assertEqual(
-            self.client._cache_key("person", sut.RefSpec("123")),
-            "permissions_client:person:123",
+            self.client._cache_key("person_1", sut.RefSpec("123")),
+            "permissions_client:person_1:123",
         )
         self.assertEqual(
             self.client._cache_key("person2", sut.RefSpec("456", "company")),
@@ -101,12 +126,12 @@ class PermissionsClientTest(TestCase):
 
     def test_global_cache_key(self):
         self.assertEqual(
-            self.client._global_cache_key("person"), "permissions_client:person:global"
+            self.client._global_cache_key("person_1"), "permissions_client:person_1:global"
         )
 
     def test_cache_read_no_cache(self):
         # Just testing that this doesn't error
-        self.assertEqual(self.client._cache_read("person", [sut.RefSpec("org")]), None)
+        self.assertEqual(self.client._cache_read("person_1", [sut.RefSpec("org")]), None)
 
     def test_cache_read_with_empty_cache(self):
         cache_mock = Mock()
@@ -114,10 +139,10 @@ class PermissionsClientTest(TestCase):
 
         cache_mock.get_many.return_value = {}
 
-        self.assertEqual(self.client._cache_read("person", [sut.RefSpec("org")]), None)
+        self.assertEqual(self.client._cache_read("person_1", [sut.RefSpec("org")]), None)
 
         cache_mock.get_many.assert_called_once_with(
-            ["permissions_client:person:global", "permissions_client:person:org"]
+            ["permissions_client:person_1:global", "permissions_client:person_1:org"]
         )
 
     def test_cache_read_with_populated_cache(self):
@@ -125,29 +150,29 @@ class PermissionsClientTest(TestCase):
         self.client.cache = cache_mock
 
         cached_doc = {
-            "permissions_client:person:global": "|",
-            "permissions_client:person:org": "read:invoices|",
+            "permissions_client:person_1:global": "|",
+            "permissions_client:person_1:org": "read:invoices|",
         }
         cache_mock.get_many.return_value = cached_doc
 
         self.assertEqual(
-            self.client._cache_read("person", [sut.RefSpec("org")]), cached_doc
+            self.client._cache_read("person_1", [sut.RefSpec("org")]), cached_doc
         )
 
         cache_mock.get_many.assert_called_once_with(
-            ["permissions_client:person:global", "permissions_client:person:org"]
+            ["permissions_client:person_1:global", "permissions_client:person_1:org"]
         )
 
     def test_cache_transform(self):
         permissions_doc = {"org": ["read:invoices"], "global": []}
 
         cached_doc = {
-            "permissions_client:person:org": "read:invoices|",
-            "permissions_client:person:global": "|",
+            "permissions_client:person_1:org": "read:invoices|",
+            "permissions_client:person_1:global": "|",
         }
 
         self.assertEqual(
-            self.client._cache_transform("person", permissions_doc), cached_doc
+            self.client._cache_transform("person_1", permissions_doc), cached_doc
         )
 
     def test_cache_write(self):
@@ -158,12 +183,12 @@ class PermissionsClientTest(TestCase):
         permissions_doc = {"org": ["read:invoices"], "global": []}
 
         cached_doc = {
-            "permissions_client:person:org": "read:invoices|",
-            "permissions_client:person:global": "|",
+            "permissions_client:person_1:org": "read:invoices|",
+            "permissions_client:person_1:global": "|",
         }
 
         self.assertEqual(
-            self.client._cache_transform("person", permissions_doc), cached_doc
+            self.client._cache_transform("person_1", permissions_doc), cached_doc
         )
 
         self.client._cache_write(cached_doc)
@@ -172,19 +197,19 @@ class PermissionsClientTest(TestCase):
     def test_registered_hooks_has_permission_org(self):
         test_example_fn = Mock()
         self.client.registrar.register("has_permission_completed", test_example_fn)
-        self.assertTrue(self.client.has_permission("person", "read:invoices", "org"))
+        self.assertTrue(self.client.has_permission("person_1", "read:invoices", "org"))
         test_example_fn.assert_any_call(
-            "person", "read:invoices", "org", ref_type=None, result=True
+            "person_1", "read:invoices", "org", ref_type=None, result=True
         )
 
     def test_registered_hooks_has_permission_location(self):
         test_example_fn = Mock()
         self.client.registrar.register("has_permission_completed", test_example_fn)
         self.assertTrue(
-            self.client.has_permission("person", "read:orders", 1, "company")
+            self.client.has_permission("person_1", "read:orders", 1, "company")
         )
         test_example_fn.assert_any_call(
-            "person", "read:orders", 1, ref_type="company", result=True
+            "person_1", "read:orders", 1, ref_type="company", result=True
         )
 
     def test_registered_hooks_has_all_permissions(self):
@@ -192,11 +217,11 @@ class PermissionsClientTest(TestCase):
         self.client.registrar.register("has_all_permissions_completed", test_example_fn)
         self.assertTrue(
             self.client.has_all_permissions(
-                "person", "read:orders", org_refs=[1, 2], ref_type="company"
+                "person_1", "read:orders", org_refs=[1, 2], ref_type="company"
             )
         )
         test_example_fn.assert_any_call(
-            "person", "read:orders", org_refs=[1, 2], ref_type="company", result=True
+            "person_1", "read:orders", org_refs=[1, 2], ref_type="company", result=True
         )
 
     def test_registered_hooks_has_global_permissions(self):
@@ -204,82 +229,82 @@ class PermissionsClientTest(TestCase):
         self.client.registrar.register(
             "has_global_permission_completed", test_example_fn
         )
-        self.assertTrue(self.client.has_global_permission("person", "read:global"))
-        test_example_fn.assert_any_call("person", "read:global", result=True)
+        self.assertTrue(self.client.has_global_permission("person_1", "read:global"))
+        test_example_fn.assert_any_call("person_1", "read:global", result=True)
 
     def test_has_permission_org(self):
-        self.assertTrue(self.client.has_permission("person", "read:invoices", "org"))
-        self.assertFalse(self.client.has_permission("person", "read:stuff", "org"))
+        self.assertTrue(self.client.has_permission("person_1", "read:invoices", "org"))
+        self.assertFalse(self.client.has_permission("person_1", "read:stuff", "org"))
         # Implicit global
-        self.assertTrue(self.client.has_permission("person", "read:global", "org"))
+        self.assertTrue(self.client.has_permission("person_1", "read:global", "org"))
 
     def test_has_permission_location(self):
         self.assertTrue(
-            self.client.has_permission("person", "read:orders", 1, "company")
+            self.client.has_permission("person_1", "read:orders", 1, "company")
         )
         self.assertFalse(
-            self.client.has_permission("person", "read:stuff", 1, "company")
+            self.client.has_permission("person_1", "read:stuff", 1, "company")
         )
-        self.assertTrue(self.client.has_permission("person", "read:team", 2, "vendor"))
+        self.assertTrue(self.client.has_permission("person_1", "read:team", 2, "vendor"))
         self.assertFalse(
-            self.client.has_permission("person", "read:stuff", 2, "vendor")
+            self.client.has_permission("person_1", "read:stuff", 2, "vendor")
         )
         # Implicit global
         self.assertTrue(
-            self.client.has_permission("person", "read:global", 1, "company")
+            self.client.has_permission("person_1", "read:global", 1, "company")
         )
         self.assertTrue(
-            self.client.has_permission("person", "read:global", 2, "vendor")
+            self.client.has_permission("person_1", "read:global", 2, "vendor")
         )
 
     def test_has_global_permission(self):
-        self.assertTrue(self.client.has_global_permission("person", "read:global"))
-        self.assertFalse(self.client.has_global_permission("person", "read:stuff"))
+        self.assertTrue(self.client.has_global_permission("person_1", "read:global"))
+        self.assertFalse(self.client.has_global_permission("person_1", "read:stuff"))
 
     def test_has_all_permissions(self):
         self.assertTrue(
             self.client.has_all_permissions(
-                "person", "read:orders", org_refs=[1, 2], ref_type="company"
+                "person_1", "read:orders", org_refs=[1, 2], ref_type="company"
             )
         )
         self.assertFalse(
             self.client.has_all_permissions(
-                "person", "write:orders", org_refs=[1, 2], ref_type="company"
+                "person_1", "write:orders", org_refs=[1, 2], ref_type="company"
             )
         )
         self.assertTrue(
             self.client.has_all_permissions(
-                "person", "read:orders", org_refs=[1], ref_type="company"
+                "person_1", "read:orders", org_refs=[1], ref_type="company"
             )
         )
 
         self.assertTrue(
             self.client.has_all_permissions(
-                "person", "read:invoices", org_refs=["org", "org2"]
+                "person_1", "read:invoices", org_refs=["org", "org2"]
             )
         )
         self.assertFalse(
             self.client.has_all_permissions(
-                "person", "write:invoices", org_refs=["org", "org2"]
+                "person_1", "write:invoices", org_refs=["org", "org2"]
             )
         )
 
         self.assertTrue(
             self.client.has_all_permissions(
-                "person", "read:global", org_refs=[1, 2, 3, 4, 5], ref_type="vendor"
+                "person_1", "read:global", org_refs=[1, 2, 3, 4, 5], ref_type="vendor"
             )
         )
         self.assertTrue(
-            self.client.has_all_permissions("person", "read:global", org_refs=["org"])
+            self.client.has_all_permissions("person_1", "read:global", org_refs=["org"])
         )
 
     def test_get_org_refs_for_permission(self):
         self.assertEqual(
-            self.client.get_org_refs_for_permission("person", "read:invoices"),
+            self.client.get_org_refs_for_permission("person_1", "read:invoices"),
             sut.ConvenientOrgRefs(set(["org", "org2"]), set([1, 2]), set([3, 4])),
         )
         self.assertEqual(
-            self.client.get_org_refs_for_permission("person", "read:stuff"),
+            self.client.get_org_refs_for_permission("person_1", "read:stuff"),
             sut.ConvenientOrgRefs(),
         )
 
@@ -289,10 +314,10 @@ class PermissionsClientTest(TestCase):
             "get_org_refs_for_permission_completed", test_example_fn
         )
 
-        self.client.get_org_refs_for_permission("person", "read:invoices")
+        self.client.get_org_refs_for_permission("person_1", "read:invoices")
 
         test_example_fn.assert_any_call(
-            "person",
+            "person_1",
             "read:invoices",
             result=sut.ConvenientOrgRefs(
                 {"org", "org2"}, {1, 2}, {3, 4}
@@ -308,4 +333,60 @@ class PermissionsClientTest(TestCase):
         self.assertEqual(
             self.client._parse_raw_org_refs([]),
             sut.ConvenientOrgRefs(set(), set(), set()),
+        )
+
+    def test_get_persons_with_permissions(self):
+        self.assertEqual(
+            set(p for p in self.client.get_persons_with_permission("read:invoices", "org")),
+            {"person_1", "person_2"},
+        )
+        self.assertEqual(
+            set(p for p in self.client.get_persons_with_permission("read:invoices", "org2")),
+            {"person_1"},
+        )
+        self.assertEqual(
+            set(p for p in self.client.get_persons_with_permission("read:invoices", "org3")),
+            {"person_2"},
+        )
+        self.assertEqual(
+            set(p for p in self.client.get_persons_with_permission("read:invoices", "minitrue")),
+            set(),
+        )
+
+    def test_get_persons_with_permissions_for_location(self):
+        self.assertEqual(
+            set(p for p in self.client.get_persons_with_permission("read:invoices", 1, "company")),
+            {"person_1", "person_2"},
+        )
+        self.assertEqual(
+            set(p for p in self.client.get_persons_with_permission("read:orders", 1, "vendor")),
+            {"person_1"},
+        )
+        self.assertEqual(
+            set(p for p in self.client.get_persons_with_permission("read:invoices", 3, "company")),
+            {"person_2"},
+        )
+        self.assertEqual(
+            set(
+                p for p in self.client.get_persons_with_permission("read:invoices", 1234, "company")
+            ),
+            set(),
+        )
+
+    def test_registered_hooks_test_get_persons_with_permission(self):
+        test_example_fn = Mock()
+        self.client.registrar.register(
+            "get_persons_with_permission_completed", test_example_fn
+        )
+
+        self.client.get_persons_with_permission("read:invoices", "org")
+
+        test_example_fn.assert_any_call(
+            "read:invoices", "org", ref_type=None, result=["person_1", "person_2"],
+        )
+
+        self.client.get_persons_with_permission("read:invoices", 1, "company")
+
+        test_example_fn.assert_any_call(
+            "read:invoices", 1, ref_type="company", result=["person_1", "person_2"],
         )

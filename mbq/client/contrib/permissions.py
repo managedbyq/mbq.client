@@ -4,7 +4,7 @@ import uuid
 from collections import defaultdict
 from copy import copy
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Iterable, List, Optional, Set, Union, cast, overload
+from typing import Callable, Dict, List, Optional, Set, Union, cast, overload
 
 import requests
 from typing_extensions import Literal, Protocol
@@ -72,7 +72,15 @@ class OSCoreClient(Protocol):
 
     def fetch_org_refs_for_permission(
         self, person_id: UUIDType, scope: str
-    ) -> Iterable[str]:
+    ) -> List[str]:
+        ...
+
+    def fetch_persons_with_permission(self, scope: str, org_ref: UUIDType) -> List[str]:
+        ...
+
+    def fetch_persons_with_permission_for_location(
+        self, scope: str, location_type: RefType, location_id: int
+    ) -> List[str]:
         ...
 
 
@@ -145,7 +153,7 @@ class OSCoreServiceClient:
 
     def fetch_org_refs_for_permission(
         self, person_id: UUIDType, scope: str
-    ) -> Iterable[str]:
+    ) -> List[str]:
         logger.debug(
             f"Fetching all orgs for which Person {person_id} has permission '{scope}'"
         )
@@ -153,6 +161,45 @@ class OSCoreServiceClient:
         try:
             return self.client.get(
                 f"/api/v1/people/{person_id}/permissions/{scope}/orgs"
+            )["objects"]
+        except requests.exceptions.HTTPError as e:
+            response = getattr(e, "response", None)
+            if response is not None and response.status_code // 100 == 4:
+                raise ClientError("Invalid request") from e
+            raise ServerError("Server error") from e
+        except Exception as e:
+            raise ServerError("Server error") from e
+
+    def fetch_persons_with_permission(self, scope: str, org_ref: UUIDType) -> List[str]:
+        logger.debug(
+            f"Fetching all persons with permission '{scope}' in org {org_ref}"
+        )
+
+        try:
+            return self.client.get(
+                f"/api/v1/permissions/people/by-org-ref",
+                {'scope': scope, 'org_ref': org_ref}
+            )["objects"]
+        except requests.exceptions.HTTPError as e:
+            response = getattr(e, "response", None)
+            if response is not None and response.status_code // 100 == 4:
+                raise ClientError("Invalid request") from e
+            raise ServerError("Server error") from e
+        except Exception as e:
+            raise ServerError("Server error") from e
+
+    def fetch_persons_with_permission_for_location(
+        self, scope: str, location_type: RefType, location_id: int
+    ) -> List[str]:
+        logger.debug(
+            f"Fetching all persons with permission '{scope}' in location "
+            "{location_id}, {location_type}"
+        )
+
+        try:
+            return self.client.get(
+                f"/api/v1/permissions/people/by-location",
+                {'scope': scope, 'location_type': location_type, 'location_id': location_id}
             )["objects"]
         except requests.exceptions.HTTPError as e:
             response = getattr(e, "response", None)
@@ -458,7 +505,7 @@ class PermissionsClient:
         )
         return result
 
-    def _parse_raw_org_refs(self, raw_org_refs: Iterable[str]) -> ConvenientOrgRefs:
+    def _parse_raw_org_refs(self, raw_org_refs: List[str]) -> ConvenientOrgRefs:
         company_ids, vendor_ids, org_refs = set(), set(), set()
         for raw_ref in raw_org_refs:
             if raw_ref.startswith("company"):
@@ -476,14 +523,63 @@ class PermissionsClient:
         """ Given a person and permission scope return all of the org or
         location references where the person has that permission.
         """
-        result = self._parse_raw_org_refs(
-            self.os_core_client.fetch_org_refs_for_permission(person_id, scope)
-        )
+        with self.collector.timed(
+            "get_org_refs_for_permission.time", tags={"type": "get_org_refs_for_permission"}
+        ):
+            result = self._parse_raw_org_refs(
+                self.os_core_client.fetch_org_refs_for_permission(person_id, scope)
+            )
+
         self.collector.increment(
-            "org_refs_for_permission",
-            tags={"call": "org_refs_for_permission", "scope": scope},
+            "get_org_refs_for_permission",
+            tags={"call": "get_org_refs_for_permission", "scope": scope},
         )
         self.registrar.emit(
             "get_org_refs_for_permission_completed", person_id, scope, result=result
         )
+
+        return result
+
+    @overload  # noqa: F811
+    def get_persons_with_permission(
+        self, scope: str, org_ref: UUIDType
+    ) -> List[str]:
+        ...
+
+    @overload  # noqa: F811
+    def get_persons_with_permission(
+        self, scope: str, org_ref: int, ref_type: RefType
+    ) -> List[str]:
+        ...
+
+    def get_persons_with_permission(  # noqa: F811
+        self,
+        scope: str,
+        org_ref: Union[UUIDType, int],
+        ref_type: Optional[RefType] = None,
+    ) -> List[str]:
+        with self.collector.timed(
+            "get_persons_with_permission.time", tags={"type": "get_persons_with_permission"}
+        ):
+            if ref_type:
+                result = self.os_core_client.fetch_persons_with_permission_for_location(
+                    scope, ref_type, int(org_ref)
+                )
+            else:
+                result = self.os_core_client.fetch_persons_with_permission(
+                    scope, str(org_ref)
+                )
+
+        self.collector.increment(
+            "get_persons_with_permission",
+            tags={"call": "get_persons_with_permission", "scope": scope},
+        )
+        self.registrar.emit(
+            "get_persons_with_permission_completed",
+            scope,
+            org_ref,
+            ref_type=ref_type,
+            result=result,
+        )
+
         return result
