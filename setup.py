@@ -38,7 +38,7 @@ setuptools.setup(
     ],
     install_requires=[
         'dataclasses>=0.6',
-        'mbq.metrics>=1.1.2',
+        'mbq.metrics>=1.1.7',
         'requests>=2.21.0,<3.0.0',
         'typing_extensions>=3.7.2',
     ],

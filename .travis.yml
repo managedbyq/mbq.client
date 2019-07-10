@@ -8,11 +8,12 @@ python:
 cache: pip
 
 install:
-  - travis_retry pip install --upgrade pip setuptools wheel twine isort flake8 flake8-isort
+  - travis_retry pip install --upgrade pip setuptools wheel twine isort flake8 flake8-isort mypy-mypyc
   - pip install .
 
 script:
   - flake8
+  - mypy .
   - python -Wall -m unittest discover
 
 notifications:
