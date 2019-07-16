@@ -75,12 +75,12 @@ class OSCoreClient(Protocol):
     ) -> List[str]:
         ...
 
-    def fetch_persons_with_permission(self, scope: str, org_ref: UUIDType) -> List[dict]:
+    def fetch_persons_with_permission(self, scope: str, org_ref: UUIDType) -> List[str]:
         ...
 
     def fetch_persons_with_permission_for_location(
         self, scope: str, location_type: RefType, location_id: int
-    ) -> List[dict]:
+    ) -> List[str]:
         ...
 
 
@@ -170,7 +170,7 @@ class OSCoreServiceClient:
         except Exception as e:
             raise ServerError("Server error") from e
 
-    def fetch_persons_with_permission(self, scope: str, org_ref: UUIDType) -> List[dict]:
+    def fetch_persons_with_permission(self, scope: str, org_ref: UUIDType) -> List[str]:
         logger.debug(
             f"Fetching all persons with permission '{scope}' in org {org_ref}"
         )
@@ -190,7 +190,7 @@ class OSCoreServiceClient:
 
     def fetch_persons_with_permission_for_location(
         self, scope: str, location_type: RefType, location_id: int
-    ) -> List[dict]:
+    ) -> List[str]:
         logger.debug(
             f"Fetching all persons with permission '{scope}' in location "
             "{location_id}, {location_type}"
@@ -543,13 +543,13 @@ class PermissionsClient:
     @overload  # noqa: F811
     def get_persons_with_permission(
         self, scope: str, org_ref: UUIDType
-    ) -> List[dict]:
+    ) -> List[str]:
         ...
 
     @overload  # noqa: F811
     def get_persons_with_permission(
         self, scope: str, org_ref: int, ref_type: RefType
-    ) -> List[dict]:
+    ) -> List[str]:
         ...
 
     def get_persons_with_permission(  # noqa: F811
@@ -557,7 +557,7 @@ class PermissionsClient:
         scope: str,
         org_ref: Union[UUIDType, int],
         ref_type: Optional[RefType] = None,
-    ) -> List[dict]:
+    ) -> List[str]:
         with self.collector.timed(
             "get_persons_with_permission.time", tags={"type": "get_persons_with_permission"}
         ):
