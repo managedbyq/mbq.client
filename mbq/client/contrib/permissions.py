@@ -83,6 +83,14 @@ class OSCoreClient(Protocol):
     ) -> List[str]:
         ...
 
+    def register_staffmembership_permission_scope(
+        self, name: str, service: str
+    ) -> None:
+        ...
+
+    def unregister_staffmembership_permission_scope(self, name: str) -> None:
+        ...
+
 
 class OSCoreServiceClient:
     def __init__(self, client: ServiceClient):
@@ -178,7 +186,7 @@ class OSCoreServiceClient:
         try:
             return self.client.get(
                 f"/api/v1/permissions/people/by-org-ref",
-                {'scope': scope, 'org_ref': org_ref}
+                {"scope": scope, "org_ref": org_ref},
             )["objects"]
         except requests.exceptions.HTTPError as e:
             response = getattr(e, "response", None)
@@ -199,8 +207,42 @@ class OSCoreServiceClient:
         try:
             return self.client.get(
                 f"/api/v1/permissions/people/by-location",
-                {'scope': scope, 'location_type': location_type, 'location_id': location_id}
+                {
+                    "scope": scope,
+                    "location_type": location_type,
+                    "location_id": location_id,
+                },
             )["objects"]
+        except requests.exceptions.HTTPError as e:
+            response = getattr(e, "response", None)
+            if response is not None and response.status_code // 100 == 4:
+                raise ClientError("Invalid request") from e
+            raise ServerError("Server error") from e
+        except Exception as e:
+            raise ServerError("Server error") from e
+
+    def register_staffmembership_permission_scope(
+        self, name: str, service: str
+    ) -> None:
+        logger.debug(
+            f"Registering {name} StaffMembershipPermissionScope from {service} to os-core"
+        )
+        try:
+            self.client.post(
+                f"/api/v1/staff-permissions", {"name": name, "service": service}
+            )
+        except requests.exceptions.HTTPError as e:
+            response = getattr(e, "response", None)
+            if response is not None and response.status_code // 100 == 4:
+                raise ClientError("Invalid request") from e
+            raise ServerError("Server error") from e
+        except Exception as e:
+            raise ServerError("Server error") from e
+
+    def unregister_staffmembership_permission_scope(self, name: str) -> None:
+        logger.debug(f"Removing {name} StaffMembershipPermissionScope from os-core")
+        try:
+            self.client.delete(f"/api/v1/staff-permissions/{name}")
         except requests.exceptions.HTTPError as e:
             response = getattr(e, "response", None)
             if response is not None and response.status_code // 100 == 4:
@@ -524,7 +566,8 @@ class PermissionsClient:
         location references where the person has that permission.
         """
         with self.collector.timed(
-            "get_org_refs_for_permission.time", tags={"type": "get_org_refs_for_permission"}
+            "get_org_refs_for_permission.time",
+            tags={"type": "get_org_refs_for_permission"},
         ):
             result = self._parse_raw_org_refs(
                 self.os_core_client.fetch_org_refs_for_permission(person_id, scope)
@@ -559,7 +602,8 @@ class PermissionsClient:
         ref_type: Optional[RefType] = None,
     ) -> List[str]:
         with self.collector.timed(
-            "get_persons_with_permission.time", tags={"type": "get_persons_with_permission"}
+            "get_persons_with_permission.time",
+            tags={"type": "get_persons_with_permission"},
         ):
             if ref_type:
                 result = self.os_core_client.fetch_persons_with_permission_for_location(
@@ -583,3 +627,11 @@ class PermissionsClient:
         )
 
         return result
+
+    def register_staffmembership_permission_scope(
+        self, name: str, service: str
+    ) -> None:
+        self.os_core_client.register_staffmembership_permission_scope(name, service)
+
+    def unregister_staffmembership_permission_scope(self, name: str) -> None:
+        self.os_core_client.unregister_staffmembership_permission_scope(name)
