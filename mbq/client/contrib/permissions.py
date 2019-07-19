@@ -34,6 +34,12 @@ class RefSpec:
 
 
 @dataclass
+class StaffPermissionsDoc:
+    is_superuser: bool
+    permissions: List[str]
+
+
+@dataclass
 class ConvenientOrgRefs:
     org_refs: Set[str] = field(default_factory=set)
     company_ids: Set[int] = field(default_factory=set)
@@ -70,6 +76,9 @@ class OSCoreClient(Protocol):
     def fetch_all_permissions(self, person_id: UUIDType) -> FetchedPermissionsDoc:
         ...
 
+    def fetch_staff_permissions(self, person_id: UUIDType) -> StaffPermissionsDoc:
+        ...
+
     def fetch_org_refs_for_permission(
         self, person_id: UUIDType, scope: str
     ) -> List[str]:
@@ -100,16 +109,9 @@ class OSCoreServiceClient:
         parsed = urllib.parse.urlparse(self.client._api_url)
         self.client._api_url = f"{parsed.scheme}://{parsed.netloc}"
 
-    def fetch_permissions(
-        self, person_id: UUIDType, org_ref: UUIDType
-    ) -> FetchedPermissionsDoc:
-        logger.debug(f"Fetching permissions from OS Core: {person_id}, {org_ref}")
-
+    def _make_get_request(self, *args, **kwargs):
         try:
-            return self.client.get(
-                f"/api/v1/people/{person_id}/permissions/by-org-ref",
-                params={"org_ref": org_ref},
-            )
+            return self.client.get(*args, **kwargs)
         except requests.exceptions.HTTPError as e:
             response = getattr(e, "response", None)
             if response is not None and response.status_code // 100 == 4:
@@ -117,6 +119,16 @@ class OSCoreServiceClient:
             raise ServerError("Server error") from e
         except Exception as e:
             raise ServerError("Server error") from e
+
+    def fetch_permissions(
+        self, person_id: UUIDType, org_ref: UUIDType
+    ) -> FetchedPermissionsDoc:
+        logger.debug(f"Fetching permissions from OS Core: {person_id}, {org_ref}")
+
+        return self._make_get_request(
+            f"/api/v1/people/{person_id}/permissions/by-org-ref",
+            params={"org_ref": org_ref},
+        )
 
     def fetch_permissions_for_location(
         self, person_id: UUIDType, location_id: int, location_type: RefType
@@ -125,31 +137,24 @@ class OSCoreServiceClient:
             f"Fetching permissions from OS Core: {person_id}, {location_type} {location_id}"
         )
 
-        try:
-            return self.client.get(
-                f"/api/v1/people/{person_id}/permissions/by-location",
-                params={"location_id": location_id, "location_type": location_type},
-            )
-        except requests.exceptions.HTTPError as e:
-            response = getattr(e, "response", None)
-            if response is not None and response.status_code // 100 == 4:
-                raise ClientError("Invalid request") from e
-            raise ServerError("Server error") from e
-        except Exception as e:
-            raise ServerError("Server error") from e
+        return self._make_get_request(
+            f"/api/v1/people/{person_id}/permissions/by-location",
+            params={"location_id": location_id, "location_type": location_type},
+        )
 
     def fetch_all_permissions(self, person_id: UUIDType) -> FetchedPermissionsDoc:
         logger.debug(f"Fetching all permissions from OS Core: {person_id}")
 
-        try:
-            return self.client.get(f"/api/v1/people/{person_id}/permissions/all")
-        except requests.exceptions.HTTPError as e:
-            response = getattr(e, "response", None)
-            if response is not None and response.status_code // 100 == 4:
-                raise ClientError("Invalid request") from e
-            raise ServerError("Server error") from e
-        except Exception as e:
-            raise ServerError("Server error") from e
+        return self._make_get_request(f"/api/v1/people/{person_id}/permissions/all")
+
+    def fetch_staff_permissions(self, person_id: UUIDType) -> StaffPermissionsDoc:
+        logger.debug(f"Fetching staff permissions from OS Core: {person_id}")
+
+        data = self._make_get_request(f"/api/v1/people/{person_id}/internal-user-permissions")
+        return StaffPermissionsDoc(
+            is_superuser=data['is_superuser'],
+            permissions=data['permissions'],
+        )
 
     def fetch_org_refs_for_permission(
         self, person_id: UUIDType, scope: str
@@ -158,35 +163,19 @@ class OSCoreServiceClient:
             f"Fetching all orgs for which Person {person_id} has permission '{scope}'"
         )
 
-        try:
-            return self.client.get(
-                f"/api/v1/people/{person_id}/permissions/{scope}/orgs"
-            )["objects"]
-        except requests.exceptions.HTTPError as e:
-            response = getattr(e, "response", None)
-            if response is not None and response.status_code // 100 == 4:
-                raise ClientError("Invalid request") from e
-            raise ServerError("Server error") from e
-        except Exception as e:
-            raise ServerError("Server error") from e
+        return self._make_get_request(
+            f"/api/v1/people/{person_id}/permissions/{scope}/orgs"
+        )["objects"]
 
     def fetch_persons_with_permission(self, scope: str, org_ref: UUIDType) -> List[str]:
         logger.debug(
             f"Fetching all persons with permission '{scope}' in org {org_ref}"
         )
 
-        try:
-            return self.client.get(
-                f"/api/v1/permissions/people/by-org-ref",
-                {'scope': scope, 'org_ref': org_ref}
-            )["objects"]
-        except requests.exceptions.HTTPError as e:
-            response = getattr(e, "response", None)
-            if response is not None and response.status_code // 100 == 4:
-                raise ClientError("Invalid request") from e
-            raise ServerError("Server error") from e
-        except Exception as e:
-            raise ServerError("Server error") from e
+        return self._make_get_request(
+            f"/api/v1/permissions/people/by-org-ref",
+            {'scope': scope, 'org_ref': org_ref}
+        )["objects"]
 
     def fetch_persons_with_permission_for_location(
         self, scope: str, location_type: RefType, location_id: int
@@ -196,18 +185,10 @@ class OSCoreServiceClient:
             "{location_id}, {location_type}"
         )
 
-        try:
-            return self.client.get(
-                f"/api/v1/permissions/people/by-location",
-                {'scope': scope, 'location_type': location_type, 'location_id': location_id}
-            )["objects"]
-        except requests.exceptions.HTTPError as e:
-            response = getattr(e, "response", None)
-            if response is not None and response.status_code // 100 == 4:
-                raise ClientError("Invalid request") from e
-            raise ServerError("Server error") from e
-        except Exception as e:
-            raise ServerError("Server error") from e
+        return self._make_get_request(
+            f"/api/v1/permissions/people/by-location",
+            {'scope': scope, 'location_type': location_type, 'location_id': location_id}
+        )["objects"]
 
 
 class Registrar:
@@ -579,6 +560,24 @@ class PermissionsClient:
             scope,
             org_ref,
             ref_type=ref_type,
+            result=result,
+        )
+
+        return result
+
+    def get_staff_permissions(self, person_id: UUIDType) -> StaffPermissionsDoc:
+        with self.collector.timed(
+            "get_staff_permissions.time", tags={"type": "get_persons_with_permission"}
+        ):
+            result = self.os_core_client.fetch_staff_permissions(person_id)
+
+        self.collector.increment(
+            "get_staff_permissions",
+            tags={"call": "get_staff_permissions", "person_id": person_id},
+        )
+        self.registrar.emit(
+            "get_persons_with_permission_completed",
+            person_id,
             result=result,
         )
 

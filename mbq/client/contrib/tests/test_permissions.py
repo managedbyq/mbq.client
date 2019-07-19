@@ -62,6 +62,12 @@ class TestOSCoreClient:
     def fetch_all_permissions(self, person_id: str) -> sut.FetchedPermissionsDoc:
         return deepcopy(self.data[person_id])
 
+    def fetch_staff_permissions(self, person_id: sut.UUIDType) -> sut.StaffPermissionsDoc:
+        return sut.StaffPermissionsDoc(
+            is_superuser=True,
+            permissions=['test_permission'],
+        )
+
     def fetch_org_refs_for_permission(
         self, person_id: str, scope: str
     ) -> List[Union[sut.UUIDType, str]]:
@@ -389,4 +395,25 @@ class PermissionsClientTest(TestCase):
 
         test_example_fn.assert_any_call(
             "read:invoices", 1, ref_type="company", result=["person_1", "person_2"],
+        )
+
+    def test_get_staff_permissions(self):
+        self.assertEqual(
+            self.client.get_staff_permissions('person_id'),
+            sut.StaffPermissionsDoc(
+                is_superuser=True,
+                permissions=['test_permission'],
+            )
+        )
+
+    def test_registered_hooks_test_get_staff_permissions(self):
+        test_example_fn = Mock()
+        self.client.registrar.register(
+            "get_persons_with_permission_completed", test_example_fn
+        )
+
+        res = self.client.get_staff_permissions("test_person")
+
+        test_example_fn.assert_any_call(
+            "test_person", result=res
         )
