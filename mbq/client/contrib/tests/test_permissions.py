@@ -63,10 +63,19 @@ class TestOSCoreClient:
         return deepcopy(self.data[person_id])
 
     def fetch_staff_permissions(self, person_id: sut.UUIDType) -> sut.StaffPermissionsDoc:
-        return sut.StaffPermissionsDoc(
-            is_superuser=True,
-            permissions=['test_permission'],
-        )
+        person_id = str(person_id)
+        return {
+            "person_id":
+                sut.StaffPermissionsDoc(
+                    is_superuser=False,
+                    permissions=['test_permission'],
+                ),
+            "superuser_id":
+                sut.StaffPermissionsDoc(
+                    is_superuser=True,
+                    permissions=[],
+                )
+        }[person_id]
 
     def fetch_org_refs_for_permission(
         self, person_id: str, scope: str
@@ -401,19 +410,47 @@ class PermissionsClientTest(TestCase):
         self.assertEqual(
             self.client.get_staff_permissions('person_id'),
             sut.StaffPermissionsDoc(
-                is_superuser=True,
+                is_superuser=False,
                 permissions=['test_permission'],
             )
+        )
+
+    def test_has_staff_permission(self):
+        self.assertTrue(
+            self.client.has_staff_permission("person_id", "test_permission"),
+        )
+        self.assertFalse(
+            self.client.has_staff_permission("person_id", "test_permission_doesnt_exist"),
+        )
+
+    def test_has_staff_permission_superuser(self):
+        self.assertTrue(
+            self.client.has_staff_permission("superuser_id", "test_permission"),
+        )
+        self.assertTrue(
+            self.client.has_staff_permission("superuser_id", "test_permission_doesnt_exist"),
         )
 
     def test_registered_hooks_test_get_staff_permissions(self):
         test_example_fn = Mock()
         self.client.registrar.register(
-            "get_persons_with_permission_completed", test_example_fn
+            "get_staff_permissions_completed", test_example_fn
         )
 
-        res = self.client.get_staff_permissions("test_person")
+        res = self.client.get_staff_permissions("person_id")
 
         test_example_fn.assert_any_call(
-            "test_person", result=res
+            "person_id", result=res
+        )
+
+    def test_registered_hooks_test_has_staff_permission(self):
+        test_example_fn = Mock()
+        self.client.registrar.register(
+            "has_staff_permission_completed", test_example_fn
+        )
+
+        res = self.client.has_staff_permission("person_id", "scope")
+
+        test_example_fn.assert_any_call(
+            "person_id", "scope", result=res
         )

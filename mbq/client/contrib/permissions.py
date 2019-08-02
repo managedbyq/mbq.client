@@ -567,7 +567,7 @@ class PermissionsClient:
 
     def get_staff_permissions(self, person_id: UUIDType) -> StaffPermissionsDoc:
         with self.collector.timed(
-            "get_staff_permissions.time", tags={"type": "get_persons_with_permission"}
+            "get_staff_permissions.time", tags={"type": "get_staff_permissions"}
         ):
             result = self.os_core_client.fetch_staff_permissions(person_id)
 
@@ -576,8 +576,31 @@ class PermissionsClient:
             tags={"call": "get_staff_permissions", "person_id": person_id},
         )
         self.registrar.emit(
-            "get_persons_with_permission_completed",
+            "get_staff_permissions_completed",
             person_id,
+            result=result,
+        )
+
+        return result
+
+    def has_staff_permission(self, person_id: UUIDType, scope: str) -> bool:
+        with self.collector.timed(
+            "has_staff_permission.time", tags={"type": "has_staff_permission"}
+        ):
+            staff_permissions_doc = self.os_core_client.fetch_staff_permissions(person_id)
+            result = (
+                staff_permissions_doc.is_superuser
+                or scope in staff_permissions_doc.permissions
+            )
+
+        self.collector.increment(
+            "has_staff_permission",
+            tags={"call": "has_staff_permission", "person_id": person_id, "scope": scope},
+        )
+        self.registrar.emit(
+            "has_staff_permission_completed",
+            person_id,
+            scope,
             result=result,
         )
 
