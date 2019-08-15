@@ -72,3 +72,29 @@ Example
 
     access_token.refresh()
     access_token() #retrieves token
+
+
+The Permissions Client
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+    OSCore = ServiceClient(
+        settings.OS_CORE_API_URL,
+        auth=Authenticator(
+            service_name="os-core",
+            token_manager=token_manager
+        ),
+    )
+
+    from mbq.client.contrib import permissions
+
+    permissions_client = permissions.PermissionsClient(
+        permissions.OSCoreServiceClient(OSCore),
+        cache_period_seconds=0
+    )
+
+    # query for a user's permission at company 15
+    permissions_client.has_permission(person_id, "read:messages", 15, "company") # returns True if person_id has that permission
+
+You can find additional information in the permissions documentation for developers `here <https://docs.google.com/document/d/1gTTLg5DfghLq0R1Uet5nr3l6KzeczDu3Kb_ijSVS8ks/edit?usp=sharing)>`_
