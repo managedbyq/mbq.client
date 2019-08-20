@@ -174,7 +174,7 @@ class OSCoreServiceClient:
 
         return self._make_get_request(
             f"/api/v1/permissions/people/by-org-ref",
-            {'scope': scope, 'org_ref': org_ref}
+            params={'scope': scope, 'org_ref': org_ref}
         )["objects"]
 
     def fetch_persons_with_permission_for_location(
@@ -187,7 +187,7 @@ class OSCoreServiceClient:
 
         return self._make_get_request(
             f"/api/v1/permissions/people/by-location",
-            {'scope': scope, 'location_type': location_type, 'location_id': location_id}
+            params={'scope': scope, 'location_type': location_type, 'location_id': location_id}
         )["objects"]
 
 
